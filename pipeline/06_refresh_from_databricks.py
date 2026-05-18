@@ -23,7 +23,7 @@ from pathlib import Path
 warnings.filterwarnings("ignore")
 
 # ── Paths ────────────────────────────────────────────────────────────────────
-_HERE = Path(__file__).parent
+_HERE = Path(__file__).resolve().parent.parent   # project root
 RAW   = Path.home() / "Downloads"          # where Databricks files were saved
 DATA  = _HERE / "data"
 GOLD_OUT    = DATA / "gold" / "gold_ranked_crises.parquet"
@@ -34,6 +34,7 @@ for p in [DATA / "bronze", DATA / "silver", DATA / "gold"]:
     p.mkdir(parents=True, exist_ok=True)
 
 sys.path.insert(0, str(_HERE))
+import sys as _sys; _sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "core"))
 from scoring_logic import score_dataframe
 
 # ── Country name → ISO3 map (for CBPF allocations) ──────────────────────────

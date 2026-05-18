@@ -22,7 +22,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-_HERE = Path(__file__).parent
+_HERE = Path(__file__).resolve().parent.parent   # project root (one level above app/)
 GOLD_PATH = _HERE / "data/gold/gold_ranked_crises.parquet"
 SECTOR_PATH = _HERE / "data/gold/sector_funding_gaps.csv"
 
@@ -131,9 +131,9 @@ def render_sidebar(df: pd.DataFrame) -> pd.DataFrame:
         total = w_gap + w_need + w_sev
         st.caption(f"Normalized: gap={w_gap/total:.2f} need={w_need/total:.2f} sev={w_sev/total:.2f}")
         if st.button("Apply custom weights", key="apply_weights"):
+            import sys as _sys2
+            _sys2.path.insert(0, str(Path(__file__).resolve().parent.parent / "core"))
             from scoring_logic import score_dataframe
-            import sys
-            sys.path.insert(0, str(Path(__file__).parent))
             custom_weights = {"funding_gap": w_gap/total, "need_scale": w_need/total, "severity": w_sev/total}
             df_full_reloaded = load_gold()
             if not df_full_reloaded.empty:
@@ -595,7 +595,7 @@ def _render_evpi_panel(df: pd.DataFrame):
         sys_path_added = False
         try:
             import sys as _sys
-            _pkg = str(Path(__file__).parent)
+            _pkg = str(Path(__file__).resolve().parent.parent / "core")
             if _pkg not in _sys.path:
                 _sys.path.insert(0, _pkg)
                 sys_path_added = True
@@ -684,14 +684,15 @@ def render_chat(df_filtered: pd.DataFrame):
 
     # Lazy import — ensure the hackathon directory is on sys.path
     import sys
-    _pkg_dir = str(Path(__file__).parent)
-    if _pkg_dir not in sys.path:
-        sys.path.insert(0, _pkg_dir)
+    _project_root = Path(__file__).resolve().parent.parent
+    _agent_dir = str(_project_root / "agent")
+    if _agent_dir not in sys.path:
+        sys.path.insert(0, _agent_dir)
     try:
         from agent_runner import run_query
     except ImportError:
         import importlib.util as _ilu
-        _spec = _ilu.spec_from_file_location("agent04", Path(__file__).parent / "04_agent.py")
+        _spec = _ilu.spec_from_file_location("agent04", _project_root / "agent" / "04_agent.py")
         _mod = _ilu.module_from_spec(_spec)
         _spec.loader.exec_module(_mod)
         run_query = _mod.run_query

@@ -23,8 +23,14 @@ import anthropic
 
 load_dotenv()
 
-GOLD_PATH    = Path(__file__).parent / "data/gold/gold_ranked_crises.parquet"
-MEMORY_PATH  = Path(__file__).parent / "data/session_memory.json"
+# Ensure agent/ dir is on sys.path so rag_search can be imported regardless of cwd
+import sys as _sys
+_AGENT_DIR = Path(__file__).resolve().parent
+if str(_AGENT_DIR) not in _sys.path:
+    _sys.path.insert(0, str(_AGENT_DIR))
+
+GOLD_PATH    = Path(__file__).resolve().parent.parent / "data/gold/gold_ranked_crises.parquet"
+MEMORY_PATH  = Path(__file__).resolve().parent.parent / "data/session_memory.json"
 MODEL        = "claude-sonnet-4-6"
 MAX_TOKENS   = 4096
 

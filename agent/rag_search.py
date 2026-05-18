@@ -18,7 +18,7 @@ from pathlib import Path
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-GOLD_PATH = Path(__file__).parent / "data/gold/gold_ranked_crises.parquet"
+GOLD_PATH = Path(__file__).resolve().parent.parent / "data/gold/gold_ranked_crises.parquet"
 
 
 def _build_document(row: pd.Series) -> str:
