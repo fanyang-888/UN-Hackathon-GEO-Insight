@@ -112,41 +112,130 @@ def compute_confidence_interval(
     inform_severity: float | None,
     consecutive_years_underfunded: int,
     reference_pin: float,
-    uncertainty_pct: float = 0.20,
+    n_simulations: int = 1000,
+    seed: int | None = None,
 ) -> dict:
     """
-    Sensitivity analysis: vary key inputs ±uncertainty_pct and return
-    (gap_score_low, gap_score_mid, gap_score_high).
+    Monte Carlo confidence interval (CMU dm-uncertainty.md §2 Monte Carlo simulation).
 
-    CMU dm-uncertainty.md: surface uncertainty rather than false precision.
-    Humanitarian data is routinely 20-30% off in needs assessments.
+    Replaces simple ±20% two-point sensitivity with triangular distribution sampling:
+    - PIN:              triangular(0.70×base, base, 1.30×base) — ±30% HNO uncertainty
+    - funding_received: triangular(0.80×base, base, 1.20×base) — ±20% FTS reporting lag
+
+    Fully vectorised via numpy — runs 1000 simulations per row in microseconds.
+    Returns P10 / P50 / P90 across simulated scenarios.
+    gap_score_low / gap_score_high kept for backward compatibility with dashboard.
     """
-    base = compute_gap_score(
-        people_in_need, funding_received, funding_requested,
-        inform_severity, consecutive_years_underfunded, reference_pin,
-    )["gap_score"]
+    rng = np.random.default_rng(seed)
+    n = n_simulations
+    w = SCORING_WEIGHTS
 
-    # Pessimistic: more people in need, less funding received
-    low_score = compute_gap_score(
-        people_in_need * (1 + uncertainty_pct),
-        funding_received * (1 - uncertainty_pct),
-        funding_requested,
-        inform_severity, consecutive_years_underfunded, reference_pin,
-    )["gap_score"]
+    # --- Triangular samples: PIN (±30%) ---
+    pin_lo   = max(float(people_in_need) * 0.70, 1e-3)
+    pin_hi   = max(float(people_in_need) * 1.30, pin_lo + 1e-3)
+    pin_mode = float(np.clip(people_in_need, pin_lo, pin_hi))
+    pin_s    = rng.triangular(pin_lo, pin_mode, pin_hi, size=n)
 
-    # Optimistic: fewer people in need, more funding received
-    high_score = compute_gap_score(
-        people_in_need * (1 - uncertainty_pct),
-        funding_received * (1 + uncertainty_pct),
-        funding_requested,
-        inform_severity, consecutive_years_underfunded, reference_pin,
-    )["gap_score"]
+    # --- Triangular samples: funding received (±20%) ---
+    fr_base  = max(float(funding_received), 0.0)
+    fr_lo    = fr_base * 0.80
+    fr_hi    = fr_base * 1.20 + 1e-3        # ensure right > mode
+    fr_mode  = float(np.clip(fr_base, fr_lo, fr_hi))
+    fund_s   = rng.triangular(fr_lo, fr_mode, fr_hi, size=n)
+
+    # --- Vectorised gap score ---
+    fq       = float(funding_requested)
+    coverage = np.where(fq > 0, np.clip(fund_s / fq, 0.0, 1.0), 0.0)
+    gap      = 1.0 - coverage
+    ref      = float(reference_pin) if (reference_pin and reference_pin > 0) else 1e7
+    ns       = np.clip(np.log1p(pin_s) / np.log1p(ref), 0.0, 1.0)
+    sev      = float(np.clip(float(inform_severity) if inform_severity is not None else 5.0, 0.0, 10.0)) / 10.0
+    base_sc  = gap * (w["funding_gap"] + w["need_scale"] * ns + w["severity"] * sev)
+    nf       = 1.0 + max(0, int(consecutive_years_underfunded)) * NEGLECT_BONUS_PER_YEAR
+    scores   = base_sc * nf
+
+    p10 = float(np.percentile(scores, 10))
+    p50 = float(np.percentile(scores, 50))
+    p90 = float(np.percentile(scores, 90))
 
     return {
-        "gap_score_low":  round(min(base, high_score), 4),
-        "gap_score_mid":  round(base, 4),
-        "gap_score_high": round(max(base, low_score), 4),
-        "gap_score_range": round(abs(low_score - high_score), 4),
+        "gap_score_low":   round(p10, 4),   # backward compat
+        "gap_score_mid":   round(p50, 4),
+        "gap_score_high":  round(p90, 4),   # backward compat
+        "gap_score_range": round(p90 - p10, 4),
+        "ci_p10":    round(p10, 4),
+        "ci_p50":    round(p50, 4),
+        "ci_p90":    round(p90, 4),
+        "ci_method": "monte_carlo_1000",
+    }
+
+
+def compute_evpi(
+    people_in_need: float,
+    funding_received: float,
+    funding_requested: float,
+    inform_severity: float | None,
+    consecutive_years_underfunded: int,
+    reference_pin: float,
+    improved_uncertainty: float = 0.05,
+    n_simulations: int = 500,
+) -> dict:
+    """
+    Expected Value of Perfect Information (EVPI) — CMU dm-uncertainty.md §1.
+
+    Answers: "If PIN uncertainty improved from ±30% to ±5%, how much would
+    gap-score ranking ambiguity decrease?"  Helps OCHA analysts decide whether
+    commissioning a more detailed Humanitarian Needs Overview (HNO) is worthwhile.
+
+    Compares P10–P90 range under:
+    - Current data quality:   PIN ±30%, funding ±20%
+    - Improved information:   PIN ±5%,  funding ±5%  (better HNO + FTS audit)
+
+    Returns score-range reduction and percentage improvement (EVPI proxy).
+    """
+    rng = np.random.default_rng(42)
+    n = n_simulations
+    w = SCORING_WEIGHTS
+    fq  = float(funding_requested)
+    ref = float(reference_pin) if (reference_pin and reference_pin > 0) else 1e7
+    sev = float(np.clip(float(inform_severity) if inform_severity is not None else 5.0, 0, 10)) / 10.0
+    nf  = 1.0 + max(0, int(consecutive_years_underfunded)) * NEGLECT_BONUS_PER_YEAR
+
+    def _score_percentiles(pin_unc: float, fund_unc: float) -> tuple[float, float, float]:
+        pb = max(float(people_in_need), 1e-3)
+        fb = max(float(funding_received), 0.0)
+        pl = pb * (1 - pin_unc); ph = pb * (1 + pin_unc) + 1e-3
+        fl = fb * (1 - fund_unc); fh = fb * (1 + fund_unc) + 1e-3
+        ps = rng.triangular(pl, np.clip(pb, pl, ph), ph, size=n)
+        fs = rng.triangular(fl, np.clip(fb, fl, fh), fh, size=n)
+        cov = np.where(fq > 0, np.clip(fs / fq, 0, 1), 0)
+        sc  = (1 - cov) * (w["funding_gap"] + w["need_scale"] * np.clip(np.log1p(ps) / np.log1p(ref), 0, 1) + w["severity"] * sev) * nf
+        return float(np.percentile(sc, 10)), float(np.percentile(sc, 90)), float(np.percentile(sc, 50))
+
+    cur_p10, cur_p90, cur_mid = _score_percentiles(0.30, 0.20)
+    imp_p10, imp_p90, imp_mid = _score_percentiles(improved_uncertainty, improved_uncertainty)
+
+    cur_range = round(cur_p90 - cur_p10, 4)
+    imp_range = round(imp_p90 - imp_p10, 4)
+    evpi_val  = round(cur_range - imp_range, 4)
+    evpi_pct  = round(evpi_val / cur_range * 100, 1) if cur_range > 0 else 0.0
+
+    return {
+        "current_range":        cur_range,
+        "current_p10":          round(cur_p10, 4),
+        "current_p90":          round(cur_p90, 4),
+        "current_mid":          round(cur_mid, 4),
+        "improved_range":       imp_range,
+        "improved_p10":         round(imp_p10, 4),
+        "improved_p90":         round(imp_p90, 4),
+        "improved_mid":         round(imp_mid, 4),
+        "evpi_score_reduction": evpi_val,
+        "evpi_pct_reduction":   evpi_pct,
+        "interpretation": (
+            "High EVPI: a more detailed needs assessment would substantially clarify this ranking."
+            if evpi_pct > 20 else
+            "Low EVPI: ranking is robust — better data precision would not shift relative position."
+        ),
     }
 
 
