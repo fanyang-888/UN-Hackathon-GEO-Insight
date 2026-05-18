@@ -56,17 +56,23 @@ Official Databricks Volume (cmu_hackathon.common.unocha)
 
 ```
 unocha-hackathon/
-├── 01_bronze_ingest.py       # Fetch raw data from HDX HAPI → data/bronze/
-├── 02_silver_transform.py    # Normalize, ISO-3 match, join → data/silver/
-├── 03_gold_scoring.py        # Gap score + CI + MLflow → data/gold/
-├── 04_agent.py               # Claude agent (6 tools, ReAct + RAG + red-team)
-├── 05_dashboard.py           # Streamlit app (4 tabs)
-├── 06_refresh_from_databricks.py  # Full rebuild from official Databricks files
-├── agent_runner.py           # Import shim for digit-prefixed 04_agent.py
-├── rag_search.py             # TF-IDF semantic search over Gold crisis table
-├── scoring_logic.py          # Gap score, Monte Carlo CI, EVPI (pure Python)
-├── data_sources.md           # Declared external data sources
+├── README.md
 ├── requirements.txt
+├── .gitignore
+├── pipeline/                 # Data pipeline (Bronze → Silver → Gold)
+│   ├── 01_bronze_ingest.py       # Fetch from HDX HAPI → data/bronze/
+│   ├── 02_silver_transform.py    # Normalize, ISO-3 match → data/silver/
+│   ├── 03_gold_scoring.py        # Gap score + CI + MLflow → data/gold/
+│   └── 06_refresh_from_databricks.py  # Full rebuild from Databricks files
+├── agent/                    # Claude agent (query → RAG → red-team → brief)
+│   ├── 04_agent.py               # 6-tool ReAct agent loop
+│   ├── agent_runner.py           # Import shim for dashboard
+│   └── rag_search.py             # TF-IDF RAG index over Gold table
+├── app/                      # Streamlit dashboard (4 tabs)
+│   └── 05_dashboard.py
+├── core/                     # Shared scoring logic (importable anywhere)
+│   └── scoring_logic.py          # Gap score, Monte Carlo CI, EVPI
+├── data_sources.md
 └── data/
     ├── bronze/               # Raw parquet per source
     │   ├── bronze_hno.parquet
@@ -77,7 +83,7 @@ unocha-hackathon/
     │   └── silver_master.parquet   # 66 rows · 24 countries · 3 years
     └── gold/
         ├── gold_ranked_crises.parquet  # 66 rows · scored & ranked
-        ├── sector_funding_gaps.csv     # 359 rows · 44 countries × 9 clusters
+        ├── sector_funding_gaps.csv     # 390 rows · 44 countries × 9 clusters
         └── top30_overlooked_crises.csv
 ```
 
@@ -116,28 +122,28 @@ Download the following files from the Databricks Unity Catalog volume
 Then run:
 
 ```bash
-python 06_refresh_from_databricks.py   # ~30 sec, rebuilds Silver + Gold
+python pipeline/06_refresh_from_databricks.py   # ~30 sec, rebuilds Silver + Gold
 ```
 
 ### 3b. Run with HDX HAPI fallback
 
 ```bash
-python 01_bronze_ingest.py      # ~2 min, live API calls
-python 02_silver_transform.py
-python 03_gold_scoring.py       # logs to MLflow
+python pipeline/01_bronze_ingest.py      # ~2 min, live API calls
+python pipeline/02_silver_transform.py
+python pipeline/03_gold_scoring.py       # logs to MLflow
 ```
 
 ### 4. Launch dashboard
 
 ```bash
-streamlit run 05_dashboard.py
+streamlit run app/05_dashboard.py
 # Opens at http://localhost:8501
 ```
 
 ### 5. (Optional) Test agent via CLI
 
 ```bash
-python 04_agent.py
+python agent/04_agent.py
 ```
 
 ---
