@@ -1,0 +1,23 @@
+# Environment
+.env
+*.env
+
+# Data (raw/processed — too large for GitHub)
+data/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# MLflow
+mlruns/
+mlflow.db
+
+# IDE
+.DS_Store
+.vscode/
+*.swp
+
+# Streamlit
+.streamlit/

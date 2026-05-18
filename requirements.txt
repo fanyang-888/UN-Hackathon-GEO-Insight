@@ -1,0 +1,11 @@
+anthropic>=0.40.0
+streamlit>=1.32.0
+plotly>=5.20.0
+pandas>=2.0.0
+requests>=2.31.0
+pycountry>=23.12.11
+duckdb>=0.10.0
+mlflow>=2.11.0
+python-dotenv>=1.0.0
+numpy>=1.26.0
+tqdm>=4.66.0
