@@ -244,10 +244,12 @@ def render_table(df: pd.DataFrame):
     # CI explanation
     with st.expander("What is the confidence interval [CI]?", expanded=False):
         st.caption(
-            "The gap score CI reflects ±20% uncertainty on humanitarian needs figures and funding data. "
-            "Humanitarian needs assessments are routinely 20–30% off. "
-            "A wide CI means the ranking position of that crisis is sensitive to data quality. "
-            "Source: CMU Decision Modeling — surface uncertainty rather than false precision."
+            "The gap score CI is computed via **Monte Carlo simulation** (1 000 runs per crisis). "
+            "Inputs follow triangular distributions: PIN ±30%, funding received ±20% — "
+            "reflecting typical humanitarian data uncertainty (HNO assessments are routinely 20–30% off). "
+            "The CI shows the **P10–P90 range** across simulated scenarios. "
+            "A wide CI means ranking position is highly sensitive to data quality. "
+            "Source: CMU Decision Modeling — dm-uncertainty.md §2 Monte Carlo."
         )
 
 
@@ -325,6 +327,114 @@ def render_sector_drilldown(df_full: pd.DataFrame, selected_country: str):
     )
     fig.update_layout(height=300)
     st.plotly_chart(fig, use_container_width=True)
+
+
+# ---------------------------------------------------------------------------
+# EVPI Panel — Expected Value of Perfect Information (dm-uncertainty.md §1)
+# ---------------------------------------------------------------------------
+
+def _render_evpi_panel(df: pd.DataFrame):
+    """
+    Show how much ranking uncertainty would decrease if PIN data improved
+    from ±30% to ±5% precision (CMU dm-uncertainty.md — EVPI concept).
+
+    Helps OCHA analysts decide whether commissioning a more detailed HNO is worth it.
+    """
+    with st.expander("📊 Value of Perfect Information (EVPI) — Is better data worth it?", expanded=False):
+        st.caption(
+            "EVPI answers: *'If PIN uncertainty improved from ±30% to ±5%, how much would "
+            "the gap-score ranking ambiguity decrease?'* "
+            "High EVPI → a more detailed Humanitarian Needs Overview (HNO) would meaningfully "
+            "clarify this crisis's ranking. Low EVPI → current data is already decisive."
+        )
+
+        if df.empty:
+            st.info("No data to analyse.")
+            return
+
+        required_cols = {"people_in_need", "funding_received", "funding_requested",
+                         "inform_severity", "consecutive_years_underfunded"}
+        if not required_cols.issubset(df.columns):
+            st.info("EVPI requires full crisis data columns.")
+            return
+
+        sys_path_added = False
+        try:
+            import sys as _sys
+            _pkg = str(Path(__file__).parent)
+            if _pkg not in _sys.path:
+                _sys.path.insert(0, _pkg)
+                sys_path_added = True
+            from scoring_logic import compute_evpi
+
+            top5 = df.head(5).copy()
+            ref_pin = float(df["people_in_need"].quantile(0.95)) or 1e7
+
+            rows = []
+            for _, row in top5.iterrows():
+                evpi = compute_evpi(
+                    people_in_need=float(row.get("people_in_need", 0)),
+                    funding_received=float(row.get("funding_received", 0)),
+                    funding_requested=float(row.get("funding_requested", 0)),
+                    inform_severity=row.get("inform_severity"),
+                    consecutive_years_underfunded=int(row.get("consecutive_years_underfunded", 0)),
+                    reference_pin=ref_pin,
+                    n_simulations=300,
+                )
+                rows.append({
+                    "country": row.get("country_name", row.get("country_iso3", "?")),
+                    "current_range": evpi["current_range"],
+                    "improved_range": evpi["improved_range"],
+                    "evpi_pct": evpi["evpi_pct_reduction"],
+                    "interpretation": evpi["interpretation"],
+                })
+
+            evpi_df = pd.DataFrame(rows)
+
+            # Plotly grouped bar chart
+            fig = go.Figure()
+            fig.add_trace(go.Bar(
+                name="Current (±30% PIN, ±20% funding)",
+                x=evpi_df["country"],
+                y=evpi_df["current_range"],
+                marker_color="#e67e22",
+                text=evpi_df["current_range"].map(lambda v: f"±{v:.3f}"),
+                textposition="outside",
+            ))
+            fig.add_trace(go.Bar(
+                name="If PIN improved to ±5%",
+                x=evpi_df["country"],
+                y=evpi_df["improved_range"],
+                marker_color="#27ae60",
+                text=evpi_df["improved_range"].map(lambda v: f"±{v:.3f}"),
+                textposition="outside",
+            ))
+            fig.update_layout(
+                barmode="group",
+                title="Gap Score P10–P90 Range: Current vs. Improved Data Quality",
+                yaxis_title="Score Uncertainty Range (P90 − P10)",
+                xaxis_title="",
+                height=340,
+                legend=dict(orientation="h", yanchor="bottom", y=1.02),
+                margin=dict(t=60, b=20),
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+            # Summary table
+            summary = evpi_df[["country", "evpi_pct", "interpretation"]].rename(columns={
+                "country": "Country",
+                "evpi_pct": "Uncertainty Reduction %",
+                "interpretation": "Verdict",
+            })
+            st.dataframe(summary, use_container_width=True, hide_index=True)
+            st.caption(
+                "Monte Carlo: 300 simulations per crisis. "
+                "Triangular distribution: PIN (±30% current / ±5% improved), funding (±20% current / ±5% improved). "
+                "Source: CMU Decision Modeling — dm-uncertainty.md §1 EVPI."
+            )
+
+        except ImportError as e:
+            st.warning(f"scoring_logic not available: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -459,6 +569,8 @@ def main():
             if "sector" in df_full.columns:
                 st.markdown("---")
                 render_sector_drilldown(df_full, top_iso3)
+        st.markdown("---")
+        _render_evpi_panel(df_filtered)
 
     with tab2:
         render_map(df_filtered)
@@ -496,7 +608,7 @@ humanitarian data uncertainty. A wide CI means ranking position is data-quality 
 **Pareto filter:** Crises dominated on all three primary dimensions are flagged but not removed,
 ensuring transparency while keeping focus on non-dominated crises.
 
-**Uncertainty flags ⚠️:** No HRP → 0% coverage is an assumption, not a measurement (shown as **0%\***).
+**Uncertainty flags ⚠️:** No HRP → 0% coverage is an assumption, not a measurement (shown as **0%**).
 Data >18 months old → figures may not reflect current conditions.
 
 **Data window note:** `consecutive_years_underfunded` is computed from available data (2024–2026 only).

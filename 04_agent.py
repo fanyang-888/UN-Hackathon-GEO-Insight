@@ -11,8 +11,10 @@ Run standalone:  python 04_agent.py
 Or import run_query() into 05_dashboard.py.
 """
 import os
+import re
 import json
 import traceback
+from collections import Counter
 import pandas as pd
 import numpy as np
 from pathlib import Path
@@ -21,11 +23,27 @@ import anthropic
 
 load_dotenv()
 
-GOLD_PATH = Path(__file__).parent / "data/gold/gold_ranked_crises.parquet"
-MODEL = "claude-sonnet-4-6"
-MAX_TOKENS = 4096
+GOLD_PATH    = Path(__file__).parent / "data/gold/gold_ranked_crises.parquet"
+MEMORY_PATH  = Path(__file__).parent / "data/session_memory.json"
+MODEL        = "claude-sonnet-4-6"
+MAX_TOKENS   = 4096
 
 client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+
+
+# ---------------------------------------------------------------------------
+# Red-team adversarial critic prompt (CMU agents.md — Multi-agent Debate)
+# ---------------------------------------------------------------------------
+
+RED_TEAM_SYSTEM = (
+    "You are an adversarial auditor reviewing a humanitarian crisis ranking. "
+    "Your sole job is to find the STRONGEST specific objections to the proposed ranking. "
+    "For each listed crisis, provide exactly ONE targeted objection from:\n"
+    "  1. Data-quality artifact inflating the score (stale HNO, no HRP so 0% is assumed, FTS lag)\n"
+    "  2. Context the metric misses (bilateral funding not in FTS, recent peace deal, access improvement)\n"
+    "  3. Methodological concern (INFORM severity aggregation for multi-crisis countries, appeal year mismatch)\n"
+    "Be specific and cite numbers. Output a compact markdown bullet list. Max 200 words total."
+)
 
 
 # ---------------------------------------------------------------------------
@@ -165,6 +183,31 @@ TOOLS = [
             "required": ["top_crises", "concerns", "confidence_level", "corrections"],
         },
     },
+    {
+        "name": "red_team_challenge",
+        "description": (
+            "Adversarial second-agent audit (CMU agents.md — Multi-agent Debate). "
+            "Spawns a separate critic agent instructed to find the STRONGEST objections "
+            "to the proposed ranking. Initial agent-critic disagreement >75%%, far more "
+            "than self-reflection (<26%%). Call this after generate_briefing_notes. "
+            "Surface the critic's concerns in your final response for balanced analysis."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "top_crises": {
+                    "type": "array",
+                    "items": {"type": "object"},
+                    "description": "The ranked crisis list (from query_gold_table).",
+                },
+                "main_response_summary": {
+                    "type": "string",
+                    "description": "One-sentence summary of your main finding so the critic has context.",
+                },
+            },
+            "required": ["top_crises", "main_response_summary"],
+        },
+    },
 ]
 
 
@@ -275,6 +318,38 @@ def tool_validate_ranking(top_crises: list[dict], concerns: list[str],
     return json.dumps(audit, indent=2)
 
 
+def tool_red_team_challenge(top_crises: list[dict], main_response_summary: str) -> str:
+    """
+    Adversarial second-agent audit (CMU agents.md — Multi-agent Debate).
+
+    Spawns a separate client.messages.create() call with RED_TEAM_SYSTEM — a critic
+    instructed to find the strongest objections to the proposed ranking.
+    Research shows two-agent debate has >75% initial disagreement vs <26% for
+    self-reflection, producing more diverse and reliable audits.
+    """
+    crisis_text = "\n".join(
+        f"#{i+1}. {c.get('country_name','?')} ({c.get('year','?')}): "
+        f"gap_score={c.get('gap_score','?')}, coverage={c.get('coverage_pct','?')}%, "
+        f"PIN={c.get('people_in_need', 0):,.0f}, has_hrp={c.get('has_hrp','?')}, "
+        f"low_confidence={c.get('low_confidence','?')}, neglect={c.get('neglect_type','?')}"
+        for i, c in enumerate(top_crises[:5])
+    )
+    prompt = (
+        f"Proposed top crises:\n{crisis_text}\n\n"
+        f"Main analysis: {main_response_summary}"
+    )
+    try:
+        resp = client.messages.create(
+            model=MODEL,
+            max_tokens=400,
+            system=RED_TEAM_SYSTEM,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return resp.content[0].text if resp.content else "No challenge produced."
+    except Exception as e:
+        return f"[Red-team unavailable: {e}]"
+
+
 def tool_generate_briefing_notes(crises: list[dict], original_query: str) -> str:
     """Generate per-crisis briefing notes inline (called by the agent loop)."""
     if not crises:
@@ -324,11 +399,15 @@ THOUGHT 3: Do any top results look suspicious? (0% coverage with no HRP, very st
   → ACTION: call validate_ranking — audit the list for data quality issues and anchoring bias
   → OBSERVATION: note confidence level and any corrections
 
-THOUGHT 4: Now generate the briefing notes grounded ONLY in tool observations.
+THOUGHT 4: Generate the briefing notes grounded ONLY in tool observations.
   → ACTION: call generate_briefing_notes
   → OBSERVATION: read the notes
 
-THOUGHT 5: Synthesize final response.
+THOUGHT 5: Red-team the ranking — challenge your own conclusions.
+  → ACTION: call red_team_challenge with the top crises and a one-sentence summary of your main finding
+  → OBSERVATION: note the strongest objections raised by the adversarial critic agent
+
+THOUGHT 6: Synthesize final response, balancing your main analysis with the critic's strongest objections.
 
 ## Critical Bias Guardrails (CMU odi-decisions.md)
 
@@ -353,26 +432,98 @@ DE NOVO SCORING — Evaluate each crisis on its current data only. Do not let th
 - If validate_ranking returns confidence_level="low", lead the final response with a prominent data quality warning."""
 
 
-import re as _re
-
 def _strip_thoughts(text: str) -> str:
     """Remove internal THOUGHT N: reasoning paragraphs from the final response."""
     paragraphs = text.split("\n\n")
     filtered = []
     for p in paragraphs:
-        # Strip markdown bold/italic markers before checking
-        clean = _re.sub(r"[\*_]{1,2}", "", p.lstrip())
-        if _re.match(r"THOUGHT\s+\d+", clean):
+        clean = re.sub(r"[\*_]{1,2}", "", p.lstrip())
+        if re.match(r"THOUGHT\s+\d+", clean):
             continue
-        # Also drop lone horizontal rules that directly follow a stripped THOUGHT
         if p.strip() in ("---", "***", "___") and not filtered:
             continue
         filtered.append(p)
     return "\n\n".join(filtered).strip()
 
 
-# Reflexion-style session memory (agents.md): persist last query context for follow-up questions
-_session_memory: dict = {}
+# ---------------------------------------------------------------------------
+# Self-consistency helpers (CMU hallucinations.md — Self-consistency strategy)
+# Run decompose_query 3 times with independent API calls and take majority vote
+# ---------------------------------------------------------------------------
+
+_DECOMPOSE_SYSTEM = (
+    "Extract filter criteria from this humanitarian crisis query. "
+    "Return ONLY valid JSON with keys: "
+    "region (string or null), max_coverage_pct (number 0-100 or null), "
+    "min_people_in_need (number or null), "
+    "neglect_type ('structural'|'acute'|'ongoing'|'improving' or null), "
+    "year (integer or null), top_n (integer, default 10). "
+    "No explanation, no markdown fences — raw JSON only."
+)
+
+
+def _run_mini_decompose(query: str) -> dict:
+    """Single-shot lean filter extraction for self-consistency voting."""
+    try:
+        resp = client.messages.create(
+            model=MODEL,
+            max_tokens=150,
+            system=_DECOMPOSE_SYSTEM,
+            messages=[{"role": "user", "content": query}],
+        )
+        text = resp.content[0].text.strip()
+        m = re.search(r"\{.*\}", text, re.DOTALL)
+        return json.loads(m.group()) if m else {}
+    except Exception:
+        return {}
+
+
+def _majority_vote_filters(candidates: list[dict]) -> dict:
+    """Merge multiple filter dicts via per-key majority vote."""
+    if not candidates:
+        return {}
+    merged: dict = {}
+    all_keys = set().union(*(r.keys() for r in candidates))
+    for key in all_keys:
+        vals = [r[key] for r in candidates if key in r]
+        if not vals:
+            continue
+        cnt = Counter(str(v) for v in vals)
+        top_str = cnt.most_common(1)[0][0]
+        for v in vals:
+            if str(v) == top_str:
+                merged[key] = v
+                break
+    return merged
+
+
+# ---------------------------------------------------------------------------
+# Reflexion session memory — persisted to data/session_memory.json
+# (CMU agents.md — Reflexion + persistent memory)
+# ---------------------------------------------------------------------------
+
+def _load_memory() -> dict:
+    """Load persisted session memory (survives Streamlit hot-reloads)."""
+    if MEMORY_PATH.exists():
+        try:
+            with open(MEMORY_PATH) as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
+def _save_memory(mem: dict) -> None:
+    """Persist session memory to disk (non-critical — silent on failure)."""
+    try:
+        MEMORY_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(MEMORY_PATH, "w") as f:
+            json.dump(mem, f, default=str, indent=2)
+    except Exception:
+        pass
+
+
+_session_memory: dict = _load_memory()
 
 
 def run_query(user_query: str, verbose: bool = False) -> dict:
@@ -448,16 +599,17 @@ def run_query(user_query: str, verbose: bool = False) -> dict:
             text_blocks = [b for b in response.content if hasattr(b, "text")]
             raw = "\n".join(b.text for b in text_blocks)
             response_text = _strip_thoughts(raw)
+            # Reflexion: persist results to disk for follow-up queries (CMU agents.md)
+            if crises:
+                _session_memory["last_crises"] = crises
+                _session_memory["last_query"] = user_query
+                _save_memory(_session_memory)
             return {
                 "response_text": response_text,
                 "crises": crises,
                 "filters_applied": filters_applied,
                 "query_rationale": query_rationale,
             }
-            # Reflexion: save results to session memory for follow-up queries
-            if crises:
-                _session_memory["last_crises"] = crises
-                _session_memory["last_query"] = user_query
 
         if response.stop_reason != "tool_use" or not tool_calls:
             # Unexpected stop — return what we have
@@ -480,9 +632,19 @@ def run_query(user_query: str, verbose: bool = False) -> dict:
 
             try:
                 if tool_name == "decompose_query":
+                    # Self-consistency: run 2 additional lean extractions and merge via
+                    # majority vote (CMU hallucinations.md — Self-consistency strategy).
+                    # Initial agent proposal + 2 independent mini-calls = 3-way vote.
                     query_rationale = tool_input.get("query_rationale", "")
-                    filters_applied = {k: v for k, v in tool_input.items() if k != "query_rationale"}
-                    result_content = json.dumps(tool_input)
+                    agent_filters = {k: v for k, v in tool_input.items() if k != "query_rationale"}
+                    mini1 = _run_mini_decompose(user_query)
+                    mini2 = _run_mini_decompose(user_query)
+                    consensus = _majority_vote_filters([agent_filters, mini1, mini2])
+                    # Merge: consensus overrides agent on stable fields; keep rationale
+                    filters_applied = {**agent_filters, **consensus}
+                    result_content = json.dumps({**filters_applied, "query_rationale": query_rationale})
+                    if verbose:
+                        print(f"    → Self-consistency consensus: {consensus}")
 
                 elif tool_name == "query_gold_table":
                     crises = tool_query_gold_table(tool_input)
@@ -504,6 +666,14 @@ def run_query(user_query: str, verbose: bool = False) -> dict:
                         confidence_level=tool_input.get("confidence_level", "medium"),
                         corrections=tool_input.get("corrections", ""),
                     )
+
+                elif tool_name == "red_team_challenge":
+                    result_content = tool_red_team_challenge(
+                        top_crises=tool_input.get("top_crises", crises),
+                        main_response_summary=tool_input.get("main_response_summary", ""),
+                    )
+                    if verbose:
+                        print(f"    → Red-team response: {result_content[:120]}…")
 
                 else:
                     result_content = json.dumps({"error": f"Unknown tool: {tool_name}"})
