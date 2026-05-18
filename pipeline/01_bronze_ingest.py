@@ -24,7 +24,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-BRONZE_DIR = Path("data/bronze")
+BRONZE_DIR = Path(__file__).resolve().parent.parent / "data/bronze"
 BRONZE_DIR.mkdir(parents=True, exist_ok=True)
 
 # HDX HAPI requires app_identifier as base64("app_name:contact_email")

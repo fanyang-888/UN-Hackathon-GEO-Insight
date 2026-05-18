@@ -18,10 +18,11 @@ except ImportError:
     HAS_MLFLOW = False
     print("MLflow not installed — skipping experiment tracking.")
 
+import sys as _sys; _sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent.parent / "core"))
 from scoring_logic import score_dataframe, classify_neglect_type
 
-SILVER_DIR = Path("data/silver")
-GOLD_DIR = Path("data/gold")
+SILVER_DIR = Path(__file__).resolve().parent.parent / "data/silver"
+GOLD_DIR = Path(__file__).resolve().parent.parent / "data/gold"
 GOLD_DIR.mkdir(parents=True, exist_ok=True)
 
 # Thresholds (tune these during the hackathon)

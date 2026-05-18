@@ -22,8 +22,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-_HERE = Path(__file__).parent
+_HERE = Path(__file__).resolve().parent.parent   # project root (one level above app/)
 GOLD_PATH = _HERE / "data/gold/gold_ranked_crises.parquet"
+SECTOR_PATH = _HERE / "data/gold/sector_funding_gaps.csv"
 
 st.set_page_config(
     page_title="Geo-Insight: Overlooked Crises",
@@ -42,6 +43,19 @@ def load_gold() -> pd.DataFrame:
     if not GOLD_PATH.exists():
         return pd.DataFrame()
     return pd.read_parquet(GOLD_PATH)
+
+
+@st.cache_data(ttl=300)
+def load_sector_gaps() -> pd.DataFrame:
+    if not SECTOR_PATH.exists():
+        return pd.DataFrame()
+    df = pd.read_csv(SECTOR_PATH)
+    numeric_cols = ["people_in_need", "people_targeted", "requirements", "funding",
+                    "coverage_pct", "funding_gap_pct"]
+    for col in numeric_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+    return df
 
 
 def get_most_recent(df: pd.DataFrame) -> pd.DataFrame:
@@ -117,9 +131,9 @@ def render_sidebar(df: pd.DataFrame) -> pd.DataFrame:
         total = w_gap + w_need + w_sev
         st.caption(f"Normalized: gap={w_gap/total:.2f} need={w_need/total:.2f} sev={w_sev/total:.2f}")
         if st.button("Apply custom weights", key="apply_weights"):
+            import sys as _sys2
+            _sys2.path.insert(0, str(Path(__file__).resolve().parent.parent / "core"))
             from scoring_logic import score_dataframe
-            import sys
-            sys.path.insert(0, str(Path(__file__).parent))
             custom_weights = {"funding_gap": w_gap/total, "need_scale": w_need/total, "severity": w_sev/total}
             df_full_reloaded = load_gold()
             if not df_full_reloaded.empty:
@@ -330,6 +344,233 @@ def render_sector_drilldown(df_full: pd.DataFrame, selected_country: str):
 
 
 # ---------------------------------------------------------------------------
+# Sector Analysis — country × cluster funding gaps (from Databricks FTS join)
+# ---------------------------------------------------------------------------
+
+# Human-readable labels for HNO cluster codes
+_CLUSTER_LABELS = {
+    "FSC":     "Food Security",
+    "HEA":     "Health",
+    "WSH":     "Water, Sanitation & Hygiene",
+    "SHL":     "Shelter",
+    "NUT":     "Nutrition",
+    "EDU":     "Education",
+    "PRO":     "Protection",
+    "PRO-GBV": "Protection / GBV",
+    "PRO-CPN": "Protection / Child",
+    "AGR":     "Agriculture / Livelihoods",
+    "CCM":     "Coordination",
+}
+
+
+def render_sector_analysis():
+    """
+    Bonus task: expose sector-level gaps so analysts can see cases where a
+    high aggregate funding figure masks severe cluster-level shortfalls.
+
+    Data: data/gold/sector_funding_gaps.csv — 51 rows, country × HNO cluster.
+    Produced by joining official HNO 2024 data with FTS cluster funding data
+    from the Databricks Unity Catalog volume (cmu_hackathon.common.unocha).
+    """
+    df = load_sector_gaps()
+
+    if df.empty:
+        st.info(
+            "Sector gap data not found. "
+            "Expected: `data/gold/sector_funding_gaps.csv` "
+            "(produced by the Databricks sector-analysis notebook)."
+        )
+        return
+
+    st.subheader("Sector-Level Funding Gaps")
+    st.caption(
+        "Each row is a **country × sector** combination. "
+        "A country may appear well-funded in aggregate while individual clusters remain severely underfunded. "
+        "Data: official HNO 2024 joined with FTS cluster allocations from OCHA Databricks workspace."
+    )
+
+    # ---- Filters ----
+    col_f1, col_f2, col_f3 = st.columns(3)
+
+    all_clusters = sorted(df["hno_cluster"].dropna().unique())
+    cluster_labels = {c: _CLUSTER_LABELS.get(c, c) for c in all_clusters}
+    with col_f1:
+        selected_clusters = st.multiselect(
+            "Filter by sector",
+            options=all_clusters,
+            default=[],
+            format_func=lambda c: cluster_labels.get(c, c),
+            placeholder="All sectors",
+        )
+
+    all_countries = sorted(df["country_iso3"].dropna().unique())
+    with col_f2:
+        selected_countries = st.multiselect(
+            "Filter by country",
+            options=all_countries,
+            default=[],
+            placeholder="All countries",
+        )
+
+    with col_f3:
+        max_cov_sector = st.slider(
+            "Max coverage % shown",
+            min_value=0, max_value=100, value=100, step=5,
+            key="sector_cov_filter",
+            help="Show only sector-country pairs funded below this percentage",
+        )
+
+    df_view = df.copy()
+    if selected_clusters:
+        df_view = df_view[df_view["hno_cluster"].isin(selected_clusters)]
+    if selected_countries:
+        df_view = df_view[df_view["country_iso3"].isin(selected_countries)]
+    df_view = df_view[df_view["coverage_pct"].fillna(0) <= max_cov_sector]
+    df_view = df_view.sort_values("funding_gap_pct", ascending=False).reset_index(drop=True)
+
+    if df_view.empty:
+        st.info("No sector-country combinations match the current filters.")
+        return
+
+    # ---- Top sector gaps bar chart ----
+    top_n = min(20, len(df_view))
+    top_df = df_view.head(top_n).copy()
+    top_df["label"] = top_df["country_iso3"] + " / " + top_df["hno_cluster"].map(
+        lambda c: _CLUSTER_LABELS.get(c, c)
+    )
+    top_df["pin_m"] = top_df["people_in_need"].div(1e6) if "people_in_need" in top_df.columns else pd.Series(0.0, index=top_df.index)
+
+    fig_bar = go.Figure()
+    fig_bar.add_trace(go.Bar(
+        name="Funding Gap %",
+        x=top_df["label"],
+        y=top_df["funding_gap_pct"],
+        marker=dict(
+            color=top_df["funding_gap_pct"],
+            colorscale=[[0, "#f1c40f"], [0.5, "#e67e22"], [1.0, "#c0392b"]],
+            cmin=50, cmax=100,
+            showscale=True,
+            colorbar=dict(title="Gap %", ticksuffix="%"),
+        ),
+        text=top_df["funding_gap_pct"].map(lambda v: f"{v:.0f}%"),
+        textposition="outside",
+        customdata=top_df[["country_iso3", "hno_cluster", "pin_m", "coverage_pct",
+                            "requirements", "funding"]].values,
+        hovertemplate=(
+            "<b>%{x}</b><br>"
+            "Country: %{customdata[0]}<br>"
+            "Cluster: %{customdata[1]}<br>"
+            "People in Need: %{customdata[2]:.1f}M<br>"
+            "Coverage: %{customdata[3]:.1f}%<br>"
+            "Required: $%{customdata[4]:,.0f}<br>"
+            "Funded: $%{customdata[5]:,.0f}<br>"
+            "<extra></extra>"
+        ),
+    ))
+    fig_bar.update_layout(
+        title=f"Top {top_n} Worst-Funded Country × Sector Combinations",
+        xaxis=dict(tickangle=-40, title=""),
+        yaxis=dict(title="Funding Gap (%)", range=[0, 115]),
+        height=420,
+        margin=dict(t=50, b=120, l=40, r=40),
+        showlegend=False,
+    )
+    st.plotly_chart(fig_bar, use_container_width=True)
+
+    # ---- Heatmap: coverage % by country × cluster ----
+    st.markdown("#### Coverage Heatmap — Country × Sector")
+    st.caption("Green = funded; Red = severe gap. Grey = no data for that combination.")
+
+    pivot = df_view.pivot_table(
+        index="country_iso3", columns="hno_cluster",
+        values="coverage_pct", aggfunc="mean",
+    )
+    pivot.columns = [_CLUSTER_LABELS.get(c, c) for c in pivot.columns]
+
+    fig_heat = go.Figure(go.Heatmap(
+        z=pivot.values,
+        x=list(pivot.columns),
+        y=list(pivot.index),
+        colorscale=[
+            [0.0, "#c0392b"],   # 0%  → red
+            [0.3, "#e67e22"],   # 30% → orange
+            [0.6, "#f1c40f"],   # 60% → yellow
+            [1.0, "#2ecc71"],   # 100% → green
+        ],
+        zmin=0, zmax=100,
+        colorbar=dict(title="Coverage %", ticksuffix="%"),
+        hoverongaps=False,
+        hovertemplate=(
+            "Country: %{y}<br>"
+            "Sector: %{x}<br>"
+            "Coverage: %{z:.1f}%<br>"
+            "<extra></extra>"
+        ),
+    ))
+    fig_heat.update_layout(
+        height=max(300, len(pivot) * 28 + 80),
+        margin=dict(t=20, b=40, l=60, r=40),
+        xaxis=dict(tickangle=-30),
+    )
+    st.plotly_chart(fig_heat, use_container_width=True)
+
+    # ---- Summary metrics ----
+    col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+    col_m1.metric("Sector-country pairs", len(df_view))
+    if "people_in_need" in df_view.columns:
+        total_pin_sector = df_view["people_in_need"].fillna(0).sum()
+        col_m2.metric("Total PIN (sectors)", f"{total_pin_sector/1e6:.1f}M")
+    else:
+        col_m2.metric("Total requirements", f"${df_view['requirements'].fillna(0).sum()/1e6:.0f}M")
+    severe = (df_view["funding_gap_pct"] >= 80).sum()
+    col_m3.metric("≥80% unfunded pairs", int(severe))
+    zero_funded = (df_view["funding"].fillna(0) == 0).sum()
+    col_m4.metric("Zero funding received", int(zero_funded))
+
+    # ---- Raw table ----
+    with st.expander("Raw sector gap table", expanded=False):
+        raw_cols = [c for c in ["country_iso3", "hno_cluster", "people_in_need", "people_targeted",
+                                "requirements", "funding", "coverage_pct", "funding_gap_pct"]
+                    if c in df_view.columns]
+        display_sector = df_view[raw_cols].copy()
+        display_sector["hno_cluster"] = display_sector["hno_cluster"].map(
+            lambda c: f"{c} — {_CLUSTER_LABELS.get(c, c)}"
+        )
+        if "people_in_need" in display_sector.columns:
+            display_sector["people_in_need"] = display_sector["people_in_need"].apply(
+                lambda x: f"{x/1e6:.2f}M" if pd.notna(x) and x >= 1e6 else f"{x:,.0f}" if pd.notna(x) else "N/A"
+            )
+        display_sector["requirements"] = display_sector["requirements"].apply(
+            lambda x: f"${x:,.0f}" if pd.notna(x) else "N/A"
+        )
+        display_sector["funding"] = display_sector["funding"].apply(
+            lambda x: f"${x:,.0f}" if pd.notna(x) else "N/A"
+        )
+        display_sector["coverage_pct"] = display_sector["coverage_pct"].apply(
+            lambda x: f"{x:.1f}%" if pd.notna(x) else "N/A"
+        )
+        display_sector["funding_gap_pct"] = display_sector["funding_gap_pct"].apply(
+            lambda x: f"{x:.1f}%" if pd.notna(x) else "N/A"
+        )
+        col_rename = {
+            "country_iso3": "Country", "hno_cluster": "Sector",
+            "people_in_need": "People in Need", "people_targeted": "People Targeted",
+            "requirements": "Requirements", "funding": "Funding Received",
+            "coverage_pct": "Coverage %", "funding_gap_pct": "Funding Gap %",
+        }
+        display_sector.rename(columns={k: v for k, v in col_rename.items() if k in display_sector.columns}, inplace=True)
+        display_sector.insert(0, "#", range(1, len(display_sector) + 1))
+        st.dataframe(display_sector, use_container_width=True, hide_index=True)
+
+    st.caption(
+        "Source: official HNO 2024 data + FTS cluster allocations 2024 "
+        "(joined in Databricks Unity Catalog, cmu_hackathon.common.unocha). "
+        "FTS cluster names mapped to HNO codes via keyword matching. "
+        "Aggregated by groupby(countryCode, hno_cluster)."
+    )
+
+
+# ---------------------------------------------------------------------------
 # EVPI Panel — Expected Value of Perfect Information (dm-uncertainty.md §1)
 # ---------------------------------------------------------------------------
 
@@ -361,7 +602,7 @@ def _render_evpi_panel(df: pd.DataFrame):
         sys_path_added = False
         try:
             import sys as _sys
-            _pkg = str(Path(__file__).parent)
+            _pkg = str(Path(__file__).resolve().parent.parent / "core")
             if _pkg not in _sys.path:
                 _sys.path.insert(0, _pkg)
                 sys_path_added = True
@@ -450,14 +691,15 @@ def render_chat(df_filtered: pd.DataFrame):
 
     # Lazy import — ensure the hackathon directory is on sys.path
     import sys
-    _pkg_dir = str(Path(__file__).parent)
-    if _pkg_dir not in sys.path:
-        sys.path.insert(0, _pkg_dir)
+    _project_root = Path(__file__).resolve().parent.parent
+    _agent_dir = str(_project_root / "agent")
+    if _agent_dir not in sys.path:
+        sys.path.insert(0, _agent_dir)
     try:
         from agent_runner import run_query
     except ImportError:
         import importlib.util as _ilu
-        _spec = _ilu.spec_from_file_location("agent04", Path(__file__).parent / "04_agent.py")
+        _spec = _ilu.spec_from_file_location("agent04", _project_root / "agent" / "04_agent.py")
         _mod = _ilu.module_from_spec(_spec)
         _spec.loader.exec_module(_mod)
         run_query = _mod.run_query
@@ -470,6 +712,8 @@ def render_chat(df_filtered: pd.DataFrame):
         "Show structurally neglected crises in Sub-Saharan Africa.",
         "Are there countries with active HRPs but under 10% funded?",
         "Which crises have been underfunded for 3+ consecutive years?",
+        "Find crises with a similar profile to Yemen — high severity, low coverage.",
+        "Which overlooked crises should a pooled fund manager prioritise this year?",
     ]
 
     with st.expander("Example queries", expanded=False):
@@ -536,8 +780,9 @@ def _render_data_quality_alert(df: pd.DataFrame):
 def main():
     st.title("🌍 Geo-Insight: Overlooked Humanitarian Crises")
     st.caption(
-        "Identifies where humanitarian need significantly outpaces funding coverage. "
-        "Built for UN OCHA · Databricks Hackathon 2026 · Data: HDX, FTS, CBPF, INFORM"
+        "Decision support for **CBPF pooled fund managers** — identifies where humanitarian need "
+        "significantly outpaces funding coverage, enabling evidence-based allocation prioritisation. "
+        "Built for UN OCHA · Databricks Hackathon 2026 · Data: HDX HNO, FTS, CBPF, INFORM Severity Index"
     )
 
     df_full = load_gold()
@@ -560,7 +805,7 @@ def main():
 
     render_metrics(df_filtered)
 
-    tab1, tab2, tab3 = st.tabs(["Ranked Table", "World Map", "Ask the Agent"])
+    tab1, tab2, tab3, tab4 = st.tabs(["Ranked Table", "World Map", "Sector Gaps", "Ask the Agent"])
 
     with tab1:
         render_table(df_filtered)
@@ -576,6 +821,9 @@ def main():
         render_map(df_filtered)
 
     with tab3:
+        render_sector_analysis()
+
+    with tab4:
         render_chat(df_filtered)
 
     # Scoring formula transparency

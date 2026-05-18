@@ -21,8 +21,8 @@ except ImportError:
     HAS_PYCOUNTRY = False
     warnings.warn("pycountry not installed; ISO-3 lookups will be partial.")
 
-BRONZE_DIR = Path("data/bronze")
-SILVER_DIR = Path("data/silver")
+BRONZE_DIR = Path(__file__).resolve().parent.parent / "data/bronze"
+SILVER_DIR = Path(__file__).resolve().parent.parent / "data/silver"
 SILVER_DIR.mkdir(parents=True, exist_ok=True)
 
 TODAY = pd.Timestamp.today().normalize()
