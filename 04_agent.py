@@ -184,6 +184,32 @@ TOOLS = [
         },
     },
     {
+        "name": "semantic_search",
+        "description": (
+            "Vector-search tool (RAG layer): retrieve crises semantically similar to a "
+            "natural-language description, even when the exact country/region name is not known. "
+            "Use this for fuzzy queries like 'find crises similar to Yemen', "
+            "'structural neglect in arid regions', or 'high severity with no HRP'. "
+            "Returns crises ranked by TF-IDF cosine similarity. "
+            "Complements query_gold_table (which does exact filter matching)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Natural-language description of the crisis profile to search for.",
+                },
+                "top_k": {
+                    "type": "integer",
+                    "description": "Number of similar crises to return (default 5, max 15).",
+                    "default": 5,
+                },
+            },
+            "required": ["query"],
+        },
+    },
+    {
         "name": "red_team_challenge",
         "description": (
             "Adversarial second-agent audit (CMU agents.md — Multi-agent Debate). "
@@ -318,6 +344,28 @@ def tool_validate_ranking(top_crises: list[dict], concerns: list[str],
     return json.dumps(audit, indent=2)
 
 
+def tool_semantic_search(query: str, top_k: int = 5) -> str:
+    """
+    RAG semantic search over the Gold crisis index (CMU agents.md — RAG tool).
+
+    Uses TF-IDF cosine similarity to retrieve crises matching a natural-language
+    description. Mirrors the Databricks Vector Search Index pattern; runs locally
+    over parquet. Useful for fuzzy queries where exact filter values are unknown.
+    """
+    try:
+        from rag_search import get_rag_index
+        rag = get_rag_index()
+        if not rag.is_ready():
+            return json.dumps({"error": "RAG index not ready — run 03_gold_scoring.py first."})
+        top_k = min(int(top_k), 15)
+        results = rag.search(query, top_k=top_k)
+        if not results:
+            return json.dumps({"message": "No semantically similar crises found.", "results": []})
+        return json.dumps(results, default=str)
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
 def tool_red_team_challenge(top_crises: list[dict], main_response_summary: str) -> str:
     """
     Adversarial second-agent audit (CMU agents.md — Multi-agent Debate).
@@ -381,18 +429,30 @@ def tool_generate_briefing_notes(crises: list[dict], original_query: str) -> str
 # Agent loop
 # ---------------------------------------------------------------------------
 
-SYSTEM_PROMPT = """You are a humanitarian data analyst for the UN OCHA Geo-Insight Command Center.
+SYSTEM_PROMPT = """You are a humanitarian data analyst supporting UN OCHA's Country-Based Pooled Fund (CBPF) managers at the Geo-Insight Command Center.
+
+## Your Audience
+Your analysis directly supports **pooled fund allocation decisions**. CBPF managers have limited funds and must prioritise which overlooked crises deserve urgent attention. Your role is to surface evidence-based insights — not to advocate for any single crisis, but to ensure decision-makers have a defensible, auditable basis for resource allocation.
+
+Key framing for every response:
+- Quantify the **funding gap** in terms of coverage shortfall (e.g. "38% of requested funding received")
+- Flag whether the gap is **structural** (persistent multi-year neglect) or **acute** (sudden deterioration)
+- Surface data quality caveats so fund managers can calibrate their confidence
+- Never recommend a specific allocation amount — say "the data suggests X warrants further assessment by fund managers"
 
 ## ReAct Workflow (follow this exactly — CMU agents.md)
 
 For every query, execute this Thought→Action→Observation loop:
 
-THOUGHT 1: Interpret the query. What geographic scope, coverage ceiling, need floor, and sector does it imply?
-  → ACTION: call decompose_query
-  → OBSERVATION: note the structured filters extracted
+THOUGHT 1: Interpret the query. Is this a structured filter query (specific region/coverage/neglect type) or a
+  fuzzy semantic query ("crises like X", "similar profile to Y", vague descriptions)?
+  → If STRUCTURED: call decompose_query, then query_gold_table
+  → If SEMANTIC/FUZZY: call semantic_search directly (RAG vector index), then optionally query_gold_table for details
+  → OBSERVATION: note the structured filters or semantic results extracted
 
-THOUGHT 2: Are the filters reasonable? Could this query be interpreted differently? Note any ambiguity.
-  → ACTION: call query_gold_table with the filters
+THOUGHT 2: Are the results reasonable? Could this query be interpreted differently? Note any ambiguity.
+  → If structured: confirm query_gold_table results
+  → If semantic: review similarity scores; if top results look wrong, also call query_gold_table to cross-check
   → OBSERVATION: note how many crises returned, which top-ranked, any surprising results
 
 THOUGHT 3: Do any top results look suspicious? (0% coverage with no HRP, very stale data, unusual PIN figures?)
@@ -666,6 +726,18 @@ def run_query(user_query: str, verbose: bool = False) -> dict:
                         confidence_level=tool_input.get("confidence_level", "medium"),
                         corrections=tool_input.get("corrections", ""),
                     )
+
+                elif tool_name == "semantic_search":
+                    result_content = tool_semantic_search(
+                        query=tool_input.get("query", ""),
+                        top_k=tool_input.get("top_k", 5),
+                    )
+                    if verbose:
+                        try:
+                            n = len(json.loads(result_content))
+                            print(f"    → {n} semantically similar crises found")
+                        except Exception:
+                            pass
 
                 elif tool_name == "red_team_challenge":
                     result_content = tool_red_team_challenge(

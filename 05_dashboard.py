@@ -470,6 +470,8 @@ def render_chat(df_filtered: pd.DataFrame):
         "Show structurally neglected crises in Sub-Saharan Africa.",
         "Are there countries with active HRPs but under 10% funded?",
         "Which crises have been underfunded for 3+ consecutive years?",
+        "Find crises with a similar profile to Yemen — high severity, low coverage.",
+        "Which overlooked crises should a pooled fund manager prioritise this year?",
     ]
 
     with st.expander("Example queries", expanded=False):
@@ -536,8 +538,9 @@ def _render_data_quality_alert(df: pd.DataFrame):
 def main():
     st.title("🌍 Geo-Insight: Overlooked Humanitarian Crises")
     st.caption(
-        "Identifies where humanitarian need significantly outpaces funding coverage. "
-        "Built for UN OCHA · Databricks Hackathon 2026 · Data: HDX, FTS, CBPF, INFORM"
+        "Decision support for **CBPF pooled fund managers** — identifies where humanitarian need "
+        "significantly outpaces funding coverage, enabling evidence-based allocation prioritisation. "
+        "Built for UN OCHA · Databricks Hackathon 2026 · Data: HDX HNO, FTS, CBPF, INFORM Severity Index"
     )
 
     df_full = load_gold()
