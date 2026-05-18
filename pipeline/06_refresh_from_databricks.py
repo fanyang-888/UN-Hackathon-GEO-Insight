@@ -35,7 +35,7 @@ for p in [DATA / "bronze", DATA / "silver", DATA / "gold"]:
 
 sys.path.insert(0, str(_HERE))
 import sys as _sys; _sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "core"))
-from scoring_logic import score_dataframe
+from scoring_logic import score_dataframe, classify_neglect_type
 
 # ── Country name → ISO3 map (for CBPF allocations) ──────────────────────────
 _CBPF_NAME_MAP = {
@@ -286,6 +286,7 @@ gold = score_dataframe(score_input, apply_pareto=True)
 gold["coverage_pct"] = gold["coverage_ratio"] * 100
 
 # Rank
+gold["neglect_type"] = gold.apply(classify_neglect_type, axis=1)
 gold = gold.sort_values("gap_score", ascending=False).reset_index(drop=True)
 gold["rank"] = range(1, len(gold) + 1)
 

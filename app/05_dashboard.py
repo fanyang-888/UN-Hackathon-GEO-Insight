@@ -438,7 +438,7 @@ def render_sector_analysis():
     top_df["label"] = top_df["country_iso3"] + " / " + top_df["hno_cluster"].map(
         lambda c: _CLUSTER_LABELS.get(c, c)
     )
-    top_df["pin_m"] = top_df["people_in_need"] / 1e6
+    top_df["pin_m"] = top_df["people_in_need"].div(1e6) if "people_in_need" in top_df.columns else pd.Series(0.0, index=top_df.index)
 
     fig_bar = go.Figure()
     fig_bar.add_trace(go.Bar(
@@ -517,8 +517,11 @@ def render_sector_analysis():
     # ---- Summary metrics ----
     col_m1, col_m2, col_m3, col_m4 = st.columns(4)
     col_m1.metric("Sector-country pairs", len(df_view))
-    total_pin_sector = df_view["people_in_need"].fillna(0).sum()
-    col_m2.metric("Total PIN (sectors)", f"{total_pin_sector/1e6:.1f}M")
+    if "people_in_need" in df_view.columns:
+        total_pin_sector = df_view["people_in_need"].fillna(0).sum()
+        col_m2.metric("Total PIN (sectors)", f"{total_pin_sector/1e6:.1f}M")
+    else:
+        col_m2.metric("Total requirements", f"${df_view['requirements'].fillna(0).sum()/1e6:.0f}M")
     severe = (df_view["funding_gap_pct"] >= 80).sum()
     col_m3.metric("≥80% unfunded pairs", int(severe))
     zero_funded = (df_view["funding"].fillna(0) == 0).sum()
@@ -526,16 +529,17 @@ def render_sector_analysis():
 
     # ---- Raw table ----
     with st.expander("Raw sector gap table", expanded=False):
-        display_sector = df_view[
-            ["country_iso3", "hno_cluster", "people_in_need", "people_targeted",
-             "requirements", "funding", "coverage_pct", "funding_gap_pct"]
-        ].copy()
+        raw_cols = [c for c in ["country_iso3", "hno_cluster", "people_in_need", "people_targeted",
+                                "requirements", "funding", "coverage_pct", "funding_gap_pct"]
+                    if c in df_view.columns]
+        display_sector = df_view[raw_cols].copy()
         display_sector["hno_cluster"] = display_sector["hno_cluster"].map(
             lambda c: f"{c} — {_CLUSTER_LABELS.get(c, c)}"
         )
-        display_sector["people_in_need"] = display_sector["people_in_need"].apply(
-            lambda x: f"{x/1e6:.2f}M" if pd.notna(x) and x >= 1e6 else f"{x:,.0f}" if pd.notna(x) else "N/A"
-        )
+        if "people_in_need" in display_sector.columns:
+            display_sector["people_in_need"] = display_sector["people_in_need"].apply(
+                lambda x: f"{x/1e6:.2f}M" if pd.notna(x) and x >= 1e6 else f"{x:,.0f}" if pd.notna(x) else "N/A"
+            )
         display_sector["requirements"] = display_sector["requirements"].apply(
             lambda x: f"${x:,.0f}" if pd.notna(x) else "N/A"
         )
@@ -548,10 +552,13 @@ def render_sector_analysis():
         display_sector["funding_gap_pct"] = display_sector["funding_gap_pct"].apply(
             lambda x: f"{x:.1f}%" if pd.notna(x) else "N/A"
         )
-        display_sector.columns = [
-            "Country", "Sector", "People in Need", "People Targeted",
-            "Requirements", "Funding Received", "Coverage %", "Funding Gap %",
-        ]
+        col_rename = {
+            "country_iso3": "Country", "hno_cluster": "Sector",
+            "people_in_need": "People in Need", "people_targeted": "People Targeted",
+            "requirements": "Requirements", "funding": "Funding Received",
+            "coverage_pct": "Coverage %", "funding_gap_pct": "Funding Gap %",
+        }
+        display_sector.rename(columns={k: v for k, v in col_rename.items() if k in display_sector.columns}, inplace=True)
         display_sector.insert(0, "#", range(1, len(display_sector) + 1))
         st.dataframe(display_sector, use_container_width=True, hide_index=True)
 
