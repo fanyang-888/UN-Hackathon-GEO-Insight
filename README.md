@@ -149,7 +149,7 @@ python agent/04_agent.py
 
 ## Gap Score Formula
 
-Composite score — CMU Decision Modeling (MCDM Weighted Sum + Swing Weighting):
+Composite score (MCDM Weighted Sum + Swing Weighting):
 
 ```python
 coverage_ratio  = min(funding_received / funding_requested, 1.0)
@@ -295,7 +295,7 @@ THOUGHT 5: Red-team challenge — adversarial second opinion on the ranking
 THOUGHT 6: Synthesize final answer, strip internal reasoning
 ```
 
-### Bias Guardrails (CMU odi-decisions.md)
+### Bias Guardrails
 
 - **Neutral framing:** "38% of requested funding received" — never loss/gain language
 - **No anchoring:** never compare to historical baseline
@@ -392,7 +392,7 @@ This system fits into **existing OCHA and CBPF analyst workflows** — it suppor
 
 **Bug fixes:** Year dropdown cast error · Multi-year Silver deduplication · Pareto cross-year over-flagging · INFORM join row explosion · `THOUGHT N:` leak to user output · All paths fixed to `Path(__file__).parent`
 
-**CMU enhancements:** Weight Sensitivity panel · Data quality drift alert banner · `★ frontier` Pareto display · Reflexion session memory (initial)
+**Dashboard enhancements:** Weight Sensitivity panel · Data quality drift alert banner · `★ frontier` Pareto display · Reflexion session memory (initial)
 
 ### 2026-05-15 (Session 1)
 
