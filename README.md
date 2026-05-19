@@ -16,8 +16,7 @@ An end-to-end Agentic Command Center that identifies humanitarian crises where d
 6. [Dashboard Pages](#dashboard-pages)
 7. [Agent Design](#agent-design)
 8. [Workflow Integration](#workflow-integration)
-9. [CMU Knowledge Base Integration](#cmu-knowledge-base-integration)
-10. [Known Limitations](#known-limitations)
+9. [Known Limitations](#known-limitations)
 11. [Changelog](#changelog)
 
 ---
@@ -150,7 +149,7 @@ python agent/04_agent.py
 
 ## Gap Score Formula
 
-Composite score — CMU Decision Modeling (MCDM Weighted Sum + Swing Weighting):
+Composite score (MCDM Weighted Sum + Swing Weighting):
 
 ```python
 coverage_ratio  = min(funding_received / funding_requested, 1.0)
@@ -296,7 +295,7 @@ THOUGHT 5: Red-team challenge — adversarial second opinion on the ranking
 THOUGHT 6: Synthesize final answer, strip internal reasoning
 ```
 
-### Bias Guardrails (CMU odi-decisions.md)
+### Bias Guardrails
 
 - **Neutral framing:** "38% of requested funding received" — never loss/gain language
 - **No anchoring:** never compare to historical baseline
@@ -347,29 +346,6 @@ This system fits into **existing OCHA and CBPF analyst workflows** — it suppor
 
 ---
 
-## CMU Knowledge Base Integration
-
-| CMU Module | Concept Applied | Where |
-|---|---|---|
-| `dm-choice-mcdm.md` | Swing Weighting for defensible weights | `scoring_logic.py` SCORING_WEIGHTS |
-| `dm-choice-mcdm.md` | Pareto filtering (cross-country only) | `scoring_logic.py` `score_dataframe()` |
-| `dm-choice-mcdm.md` | Ringer Bid prevention (95th-pct reference) | `scoring_logic.py` `compute_gap_score()` |
-| `dm-choice-mcdm.md` | Weight sensitivity "what-if" panel | `05_dashboard.py` sidebar |
-| `dm-uncertainty.md` | Monte Carlo CI (P10/P50/P90, 1 000 runs) | `scoring_logic.py` `compute_confidence_interval()` |
-| `dm-uncertainty.md` | EVPI: current vs. improved data quality | `scoring_logic.py` `compute_evpi()` |
-| `agents.md` | ReAct 6-step Thought→Action→Observation | `04_agent.py` SYSTEM_PROMPT |
-| `agents.md` | Self-evaluation (`validate_ranking` tool) | `04_agent.py` tool dispatch |
-| `agents.md` | Reflexion session memory + persistence | `04_agent.py` / `session_memory.json` |
-| `rag.md` | TF-IDF vector index, cosine similarity | `rag_search.py` `CrisisRAG` |
-| `in-context-learning.md` | Self-consistency: 3-way majority vote | `04_agent.py` `_majority_vote_filters()` |
-| `aimd-tools-agents-code.md` | Multi-agent debate / red-team pattern | `04_agent.py` `tool_red_team_challenge()` |
-| `hallucinations.md` | Grounding mandate (numbers from tools only) | `04_agent.py` Hard Rules |
-| `odi-decisions.md` | Neutral framing, no anchoring, counter-argument | `04_agent.py` SYSTEM_PROMPT |
-| `oai-monitoring-governance.md` | Data quality drift alert banner | `05_dashboard.py` `_render_data_quality_alert()` |
-| `de-foundations.md` | Medallion architecture (Bronze/Silver/Gold) | Pipeline structure |
-
----
-
 ## Known Limitations
 
 | Issue | Impact | Mitigation |
@@ -416,7 +392,7 @@ This system fits into **existing OCHA and CBPF analyst workflows** — it suppor
 
 **Bug fixes:** Year dropdown cast error · Multi-year Silver deduplication · Pareto cross-year over-flagging · INFORM join row explosion · `THOUGHT N:` leak to user output · All paths fixed to `Path(__file__).parent`
 
-**CMU enhancements:** Weight Sensitivity panel · Data quality drift alert banner · `★ frontier` Pareto display · Reflexion session memory (initial)
+**Dashboard enhancements:** Weight Sensitivity panel · Data quality drift alert banner · `★ frontier` Pareto display · Reflexion session memory (initial)
 
 ### 2026-05-15 (Session 1)
 
