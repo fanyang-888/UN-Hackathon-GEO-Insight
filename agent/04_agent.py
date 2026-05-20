@@ -13,6 +13,7 @@ Or import run_query() into 05_dashboard.py.
 import os
 import re
 import json
+import time
 import traceback
 from collections import Counter
 import pandas as pd
@@ -20,8 +21,11 @@ import numpy as np
 from pathlib import Path
 from dotenv import load_dotenv
 import anthropic
+import mlflow
 
 load_dotenv()
+
+mlflow.set_experiment("geo-insight-agent")
 
 # Ensure agent/ dir is on sys.path so rag_search can be imported regardless of cwd
 import sys as _sys
@@ -596,9 +600,10 @@ def run_query(user_query: str, verbose: bool = False) -> dict:
     """
     Run a user query through the agent and return a structured result.
 
-    Implements Reflexion-style session memory (agents.md): if the query references
-    a prior result ("tell me more about #1", "what about the top crisis?"), the
-    previous crisis list is injected as context.
+    Implements Reflexion-style session memory: if the query references a prior result
+    ("tell me more about #1", "what about the top crisis?"), the previous crisis list
+    is injected as context. Every query is traced end-to-end in MLflow (Day 2 pattern:
+    tracing → tool spans → latency → metrics).
 
     Returns:
         {
@@ -608,6 +613,8 @@ def run_query(user_query: str, verbose: bool = False) -> dict:
             "query_rationale": str,       # Agent's interpretation
         }
     """
+    _t0 = time.time()
+
     # Detect follow-up references and inject prior context
     followup_triggers = ["#1", "#2", "#3", "top crisis", "first crisis", "that crisis",
                          "tell me more", "more about", "elaborate", "explain further"]
@@ -629,150 +636,183 @@ def run_query(user_query: str, verbose: bool = False) -> dict:
     crises = []
     filters_applied = {}
     query_rationale = ""
-    tool_results_for_next = []
+    tools_called: list[str] = []
+    confidence_level = "medium"
 
-    max_iterations = 6
-    for iteration in range(max_iterations):
-        if verbose:
-            print(f"\n[Agent iteration {iteration + 1}]")
+    with mlflow.start_span("agent_query", span_type="CHAIN") as root_span:
+        root_span.set_inputs({"query": user_query, "is_followup": is_followup})
 
-        kwargs = {
-            "model": MODEL,
-            "max_tokens": MAX_TOKENS,
-            "system": SYSTEM_PROMPT,
-            "tools": TOOLS,
-            "messages": messages,
-        }
-
-        response = client.messages.create(**kwargs)
-
-        if verbose:
-            print(f"  stop_reason: {response.stop_reason}")
-
-        # Collect assistant message
-        assistant_content = []
-        tool_calls = []
-
-        for block in response.content:
-            assistant_content.append(block)
-            if block.type == "tool_use":
-                tool_calls.append(block)
-
-        messages.append({"role": "assistant", "content": assistant_content})
-
-        if response.stop_reason == "end_turn":
-            # Extract final text response; strip internal THOUGHT reasoning lines
-            text_blocks = [b for b in response.content if hasattr(b, "text")]
-            raw = "\n".join(b.text for b in text_blocks)
-            response_text = _strip_thoughts(raw)
-            # Reflexion: persist results to disk for follow-up queries (CMU agents.md)
-            if crises:
-                _session_memory["last_crises"] = crises
-                _session_memory["last_query"] = user_query
-                _save_memory(_session_memory)
-            return {
-                "response_text": response_text,
-                "crises": crises,
-                "filters_applied": filters_applied,
-                "query_rationale": query_rationale,
-            }
-
-        if response.stop_reason != "tool_use" or not tool_calls:
-            # Unexpected stop — return what we have
-            text_blocks = [b for b in response.content if hasattr(b, "text")]
-            response_text = _strip_thoughts("\n".join(b.text for b in text_blocks))
-            return {
-                "response_text": response_text or "No results returned.",
-                "crises": crises,
-                "filters_applied": filters_applied,
-                "query_rationale": query_rationale,
-            }
-
-        # Execute tool calls
-        tool_results = []
-        for tc in tool_calls:
-            tool_name = tc.name
-            tool_input = tc.input
+        max_iterations = 6
+        for iteration in range(max_iterations):
             if verbose:
-                print(f"  Tool call: {tool_name}({json.dumps(tool_input, default=str)[:200]})")
+                print(f"\n[Agent iteration {iteration + 1}]")
 
-            try:
-                if tool_name == "decompose_query":
-                    # Self-consistency: run 2 additional lean extractions and merge via
-                    # majority vote (CMU hallucinations.md — Self-consistency strategy).
-                    # Initial agent proposal + 2 independent mini-calls = 3-way vote.
-                    query_rationale = tool_input.get("query_rationale", "")
-                    agent_filters = {k: v for k, v in tool_input.items() if k != "query_rationale"}
-                    mini1 = _run_mini_decompose(user_query)
-                    mini2 = _run_mini_decompose(user_query)
-                    consensus = _majority_vote_filters([agent_filters, mini1, mini2])
-                    # Merge: consensus overrides agent on stable fields; keep rationale
-                    filters_applied = {**agent_filters, **consensus}
-                    result_content = json.dumps({**filters_applied, "query_rationale": query_rationale})
-                    if verbose:
-                        print(f"    → Self-consistency consensus: {consensus}")
+            kwargs = {
+                "model": MODEL,
+                "max_tokens": MAX_TOKENS,
+                "system": SYSTEM_PROMPT,
+                "tools": TOOLS,
+                "messages": messages,
+            }
 
-                elif tool_name == "query_gold_table":
-                    crises = tool_query_gold_table(tool_input)
-                    result_content = json.dumps(crises, default=str)
-                    if verbose:
-                        print(f"    → {len(crises)} crises returned")
+            response = client.messages.create(**kwargs)
 
-                elif tool_name == "generate_briefing_notes":
-                    briefings = tool_generate_briefing_notes(
-                        tool_input.get("crises", crises),
-                        tool_input.get("original_query", user_query),
-                    )
-                    result_content = briefings
+            if verbose:
+                print(f"  stop_reason: {response.stop_reason}")
 
-                elif tool_name == "validate_ranking":
-                    result_content = tool_validate_ranking(
-                        top_crises=tool_input.get("top_crises", crises),
-                        concerns=tool_input.get("concerns", []),
-                        confidence_level=tool_input.get("confidence_level", "medium"),
-                        corrections=tool_input.get("corrections", ""),
-                    )
+            # Collect assistant message
+            assistant_content = []
+            tool_calls = []
 
-                elif tool_name == "semantic_search":
-                    result_content = tool_semantic_search(
-                        query=tool_input.get("query", ""),
-                        top_k=tool_input.get("top_k", 5),
-                    )
-                    if verbose:
-                        try:
-                            n = len(json.loads(result_content))
-                            print(f"    → {n} semantically similar crises found")
-                        except Exception:
-                            pass
+            for block in response.content:
+                assistant_content.append(block)
+                if block.type == "tool_use":
+                    tool_calls.append(block)
 
-                elif tool_name == "red_team_challenge":
-                    result_content = tool_red_team_challenge(
-                        top_crises=tool_input.get("top_crises", crises),
-                        main_response_summary=tool_input.get("main_response_summary", ""),
-                    )
-                    if verbose:
-                        print(f"    → Red-team response: {result_content[:120]}…")
+            messages.append({"role": "assistant", "content": assistant_content})
 
-                else:
-                    result_content = json.dumps({"error": f"Unknown tool: {tool_name}"})
+            if response.stop_reason == "end_turn":
+                # Extract final text response; strip internal THOUGHT reasoning lines
+                text_blocks = [b for b in response.content if hasattr(b, "text")]
+                raw = "\n".join(b.text for b in text_blocks)
+                response_text = _strip_thoughts(raw)
 
-            except Exception as e:
-                result_content = json.dumps({"error": str(e), "trace": traceback.format_exc()[:500]})
+                # ── MLflow: log final metrics on root span ──────────────────
+                route = "semantic" if "semantic_search" in tools_called else "structured"
+                root_span.set_outputs({
+                    "num_crises_returned": len(crises),
+                    "route": route,
+                    "confidence_level": confidence_level,
+                    "response_chars": len(response_text),
+                    "tools_called": tools_called,
+                })
+                root_span.set_attribute("latency_seconds", round(time.time() - _t0, 2))
+                root_span.set_attribute("num_iterations", iteration + 1)
+                root_span.set_attribute("route", route)
 
-            tool_results.append({
-                "type": "tool_result",
-                "tool_use_id": tc.id,
-                "content": result_content,
-            })
+                # Reflexion: persist results to disk for follow-up queries
+                if crises:
+                    _session_memory["last_crises"] = crises
+                    _session_memory["last_query"] = user_query
+                    _save_memory(_session_memory)
+                return {
+                    "response_text": response_text,
+                    "crises": crises,
+                    "filters_applied": filters_applied,
+                    "query_rationale": query_rationale,
+                }
 
-        messages.append({"role": "user", "content": tool_results})
+            if response.stop_reason != "tool_use" or not tool_calls:
+                # Unexpected stop — return what we have
+                text_blocks = [b for b in response.content if hasattr(b, "text")]
+                response_text = _strip_thoughts("\n".join(b.text for b in text_blocks))
+                root_span.set_outputs({"early_stop": True, "reason": response.stop_reason})
+                return {
+                    "response_text": response_text or "No results returned.",
+                    "crises": crises,
+                    "filters_applied": filters_applied,
+                    "query_rationale": query_rationale,
+                }
 
-    return {
-        "response_text": "Agent reached max iterations without completing.",
-        "crises": crises,
-        "filters_applied": filters_applied,
-        "query_rationale": query_rationale,
-    }
+            # Execute tool calls — each gets its own child span
+            tool_results = []
+            for tc in tool_calls:
+                tool_name = tc.name
+                tool_input = tc.input
+                tools_called.append(tool_name)
+                if verbose:
+                    print(f"  Tool call: {tool_name}({json.dumps(tool_input, default=str)[:200]})")
+
+                with mlflow.start_span(f"tool:{tool_name}", span_type="TOOL") as tool_span:
+                    tool_span.set_inputs({k: str(v)[:300] for k, v in tool_input.items()})
+
+                    try:
+                        if tool_name == "decompose_query":
+                            # Self-consistency: 3-way majority vote across parallel decompositions
+                            query_rationale = tool_input.get("query_rationale", "")
+                            agent_filters = {k: v for k, v in tool_input.items() if k != "query_rationale"}
+                            mini1 = _run_mini_decompose(user_query)
+                            mini2 = _run_mini_decompose(user_query)
+                            consensus = _majority_vote_filters([agent_filters, mini1, mini2])
+                            filters_applied = {**agent_filters, **consensus}
+                            result_content = json.dumps({**filters_applied, "query_rationale": query_rationale})
+                            tool_span.set_outputs({"consensus_filters": consensus})
+                            if verbose:
+                                print(f"    → Self-consistency consensus: {consensus}")
+
+                        elif tool_name == "query_gold_table":
+                            crises = tool_query_gold_table(tool_input)
+                            result_content = json.dumps(crises, default=str)
+                            tool_span.set_outputs({"num_crises": len(crises)})
+                            if verbose:
+                                print(f"    → {len(crises)} crises returned")
+
+                        elif tool_name == "generate_briefing_notes":
+                            briefings = tool_generate_briefing_notes(
+                                tool_input.get("crises", crises),
+                                tool_input.get("original_query", user_query),
+                            )
+                            result_content = briefings
+                            tool_span.set_outputs({"briefing_chars": len(briefings)})
+
+                        elif tool_name == "validate_ranking":
+                            confidence_level = tool_input.get("confidence_level", "medium")
+                            result_content = tool_validate_ranking(
+                                top_crises=tool_input.get("top_crises", crises),
+                                concerns=tool_input.get("concerns", []),
+                                confidence_level=confidence_level,
+                                corrections=tool_input.get("corrections", ""),
+                            )
+                            tool_span.set_outputs({
+                                "confidence_level": confidence_level,
+                                "num_concerns": len(tool_input.get("concerns", [])),
+                            })
+
+                        elif tool_name == "semantic_search":
+                            result_content = tool_semantic_search(
+                                query=tool_input.get("query", ""),
+                                top_k=tool_input.get("top_k", 5),
+                            )
+                            try:
+                                n = len(json.loads(result_content))
+                                tool_span.set_outputs({"num_similar": n})
+                                if verbose:
+                                    print(f"    → {n} semantically similar crises found")
+                            except Exception:
+                                pass
+
+                        elif tool_name == "red_team_challenge":
+                            result_content = tool_red_team_challenge(
+                                top_crises=tool_input.get("top_crises", crises),
+                                main_response_summary=tool_input.get("main_response_summary", ""),
+                            )
+                            tool_span.set_outputs({"critique_chars": len(result_content)})
+                            if verbose:
+                                print(f"    → Red-team response: {result_content[:120]}…")
+
+                        else:
+                            result_content = json.dumps({"error": f"Unknown tool: {tool_name}"})
+                            tool_span.set_outputs({"error": f"Unknown tool: {tool_name}"})
+
+                    except Exception as e:
+                        result_content = json.dumps({"error": str(e), "trace": traceback.format_exc()[:500]})
+                        tool_span.set_outputs({"error": str(e)})
+
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": tc.id,
+                    "content": result_content,
+                })
+
+            messages.append({"role": "user", "content": tool_results})
+
+        root_span.set_outputs({"max_iterations_reached": True})
+        return {
+            "response_text": "Agent reached max iterations without completing.",
+            "crises": crises,
+            "filters_applied": filters_applied,
+            "query_rationale": query_rationale,
+        }
 
 
 # ---------------------------------------------------------------------------

@@ -20,9 +20,8 @@ import plotly.graph_objects as go
 from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
-
 _HERE = Path(__file__).resolve().parent.parent   # project root (one level above app/)
+load_dotenv(_HERE / ".env", override=True)
 GOLD_PATH = _HERE / "data/gold/gold_ranked_crises.parquet"
 SECTOR_PATH = _HERE / "data/gold/sector_funding_gaps.csv"
 
@@ -682,6 +681,7 @@ def _render_evpi_panel(df: pd.DataFrame):
 # Conversational agent interface
 # ---------------------------------------------------------------------------
 
+@st.fragment
 def render_chat(df_filtered: pd.DataFrame):
     st.subheader("Ask the Command Center")
 

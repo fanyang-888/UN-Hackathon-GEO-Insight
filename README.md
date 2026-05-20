@@ -43,11 +43,15 @@ Official Databricks Volume (cmu_hackathon.common.unocha)
   [RAG Index]      rag_search.py  — TF-IDF vector index over Gold table
         ↓
   [04 Claude Agent]  — ReAct loop: decompose → query/RAG → red-team → brief
+        ↓             MLflow Tracing: every query → root span + per-tool child spans
+        ↓
+  [05 Evaluate]    pipeline/05_evaluate_agent.py  — LLM-as-Judge eval (4 golden cases)
+        ↓             Logs to MLflow experiment "geo-insight-eval"
         ↓
   [05 Streamlit UI]  — Ranked Table · World Map · Sector Gaps · Ask the Agent
 ```
 
-**Tech stack:** Python 3.12 · Pandas · Claude API (claude-sonnet-4-6) · MLflow · Streamlit · Plotly · scikit-learn (TF-IDF RAG)
+**Tech stack:** Python 3.12 · Pandas · Claude API (claude-sonnet-4-6) · MLflow 3 (Tracing + Eval) · Streamlit · Plotly · scikit-learn (TF-IDF RAG)
 
 ---
 
@@ -62,6 +66,7 @@ unocha-hackathon/
 │   ├── 01_bronze_ingest.py       # Fetch from HDX HAPI → data/bronze/
 │   ├── 02_silver_transform.py    # Normalize, ISO-3 match → data/silver/
 │   ├── 03_gold_scoring.py        # Gap score + CI + MLflow → data/gold/
+│   ├── 05_evaluate_agent.py      # LLM-as-Judge eval → MLflow "geo-insight-eval"
 │   └── 06_refresh_from_databricks.py  # Full rebuild from Databricks files
 ├── agent/                    # Claude agent (query → RAG → red-team → brief)
 │   ├── 04_agent.py               # 6-tool ReAct agent loop
@@ -302,6 +307,31 @@ THOUGHT 6: Synthesize final answer, strip internal reasoning
 - **Forced counter-argument:** every crisis briefing includes one reason the score may be overstated
 - **Grounding mandate:** all numbers must come from tool observations, never hallucinated
 
+### MLflow Tracing & Evaluation
+
+Every `run_query()` call is fully traced end-to-end in MLflow 3 (Open Telemetry standard):
+
+```
+agent_query  [root span]
+├── tool:decompose_query   — inputs: query  |  outputs: consensus_filters
+├── tool:query_gold_table  — inputs: filters  |  outputs: num_crises
+├── tool:validate_ranking  — inputs: crises  |  outputs: confidence_level
+├── tool:generate_briefing_notes
+├── tool:red_team_challenge  — outputs: critique_chars
+└── attributes: latency_seconds, num_iterations, route (structured|semantic)
+```
+
+**LLM-as-Judge evaluation** (`pipeline/05_evaluate_agent.py`): 4 golden test cases scored on correctness · groundedness · neutrality · completeness (0–4 each, max 16). Results logged to MLflow experiment `geo-insight-eval`.
+
+| Case | Coverage | Judge /16 |
+|------|----------|-----------|
+| Global top underfunded | 80% | 4 |
+| HRP countries < 20% funded | 100% | 10 |
+| Structural neglect 3+ yrs | 100% | 11 |
+| Semantic similar to Yemen | 75% | 10 |
+
+View traces: `mlflow ui` → http://localhost:5000
+
 ### Session Memory (Reflexion)
 
 Follow-up queries containing "tell me more", "#1", "top crisis", "elaborate" automatically inject the prior query's crisis list. Persisted to `data/session_memory.json`.
@@ -360,6 +390,23 @@ This system fits into **existing OCHA and CBPF analyst workflows** — it suppor
 ---
 
 ## Changelog
+
+### 2026-05-20 (Session 4)
+
+**MLflow Tracing (Day 2 Databricks session):**
+- `04_agent.py`: every `run_query()` wrapped in `mlflow.start_span("agent_query")` root span
+- Each tool call gets a child span with inputs/outputs/latency logged
+- Attributes: `route` (structured|semantic), `confidence_level`, `num_iterations`, `latency_seconds`
+- Experiment: `geo-insight-agent` (view: `mlflow ui`)
+
+**LLM-as-Judge evaluation (`pipeline/05_evaluate_agent.py`):**
+- 4 golden test cases (hackathon PDF sample queries)
+- Claude scores each response on correctness / groundedness / neutrality / completeness (0–4)
+- MLflow experiment `geo-insight-eval` logs scores, country coverage hit-rate, latency, artifacts
+
+**Dashboard fix:**
+- `render_chat()` decorated with `@st.fragment` — Agent tab no longer jumps to Ranked Table while query runs
+- `load_dotenv` path fixed with `override=True` to reliably load `ANTHROPIC_API_KEY`
 
 ### 2026-05-18 (Session 3)
 
