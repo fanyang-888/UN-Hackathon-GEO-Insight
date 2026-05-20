@@ -32,6 +32,203 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# ---------------------------------------------------------------------------
+# Custom CSS — visual polish
+# ---------------------------------------------------------------------------
+st.markdown("""
+<style>
+/* ── Google Fonts ─────────────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+html, body, [class*="css"] {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+}
+
+/* ── Page background ─────────────────────────────────────────────────────── */
+.main .block-container {
+    padding-top: 1.5rem;
+    padding-bottom: 2rem;
+    max-width: 1400px;
+}
+
+/* ── App title ───────────────────────────────────────────────────────────── */
+h1 {
+    font-size: 1.75rem !important;
+    font-weight: 700 !important;
+    color: #1a202c !important;
+    letter-spacing: -0.02em;
+}
+h2 {
+    font-size: 1.15rem !important;
+    font-weight: 600 !important;
+    color: #2d3748 !important;
+    margin-top: 0.5rem;
+}
+h3 {
+    font-size: 1rem !important;
+    font-weight: 600 !important;
+    color: #2d3748 !important;
+}
+
+/* ── Metric cards ────────────────────────────────────────────────────────── */
+[data-testid="stMetric"] {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+[data-testid="stMetricLabel"] {
+    font-size: 0.75rem !important;
+    font-weight: 500 !important;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #718096 !important;
+}
+[data-testid="stMetricValue"] {
+    font-size: 1.6rem !important;
+    font-weight: 700 !important;
+    color: #1a202c !important;
+}
+[data-testid="stMetricDelta"] {
+    font-size: 0.78rem !important;
+    font-weight: 500 !important;
+}
+
+/* ── Sidebar ─────────────────────────────────────────────────────────────── */
+[data-testid="stSidebar"] {
+    background: #1e2a3a !important;
+    border-right: none;
+}
+[data-testid="stSidebar"] * {
+    color: #e2e8f0 !important;
+}
+[data-testid="stSidebar"] .stMarkdown p {
+    color: #a0aec0 !important;
+    font-size: 0.8rem;
+}
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3 {
+    color: #f7fafc !important;
+}
+[data-testid="stSidebar"] [data-testid="stExpander"] {
+    background: rgba(255,255,255,0.06) !important;
+    border: 1px solid rgba(255,255,255,0.12) !important;
+    border-radius: 8px;
+}
+[data-testid="stSidebar"] label {
+    color: #cbd5e0 !important;
+    font-size: 0.82rem !important;
+    font-weight: 500 !important;
+}
+
+/* ── Tabs ────────────────────────────────────────────────────────────────── */
+[data-testid="stTabs"] [role="tablist"] {
+    gap: 0.25rem;
+    border-bottom: 2px solid #e2e8f0;
+    padding-bottom: 0;
+}
+[data-testid="stTabs"] button[role="tab"] {
+    font-size: 0.85rem !important;
+    font-weight: 500 !important;
+    padding: 0.5rem 1rem !important;
+    border-radius: 6px 6px 0 0 !important;
+    color: #718096 !important;
+    border: none !important;
+    background: transparent !important;
+    transition: all 0.15s ease;
+}
+[data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
+    color: #1a73e8 !important;
+    font-weight: 600 !important;
+    border-bottom: 2px solid #1a73e8 !important;
+    background: transparent !important;
+}
+[data-testid="stTabs"] button[role="tab"]:hover {
+    color: #2d3748 !important;
+    background: #f7fafc !important;
+}
+
+/* ── Dataframe / table ───────────────────────────────────────────────────── */
+[data-testid="stDataFrame"] {
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 10px !important;
+    overflow: hidden;
+}
+[data-testid="stDataFrame"] thead tr th {
+    background: #f7fafc !important;
+    font-weight: 600 !important;
+    font-size: 0.78rem !important;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #4a5568 !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+}
+[data-testid="stDataFrame"] tbody tr:hover td {
+    background: #ebf4ff !important;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+[data-testid="stButton"] > button {
+    border-radius: 8px !important;
+    font-weight: 500 !important;
+    font-size: 0.85rem !important;
+    padding: 0.4rem 1rem !important;
+    transition: all 0.15s ease !important;
+    border: 1px solid #e2e8f0 !important;
+}
+[data-testid="stButton"] > button:hover {
+    border-color: #1a73e8 !important;
+    color: #1a73e8 !important;
+    background: #ebf4ff !important;
+}
+
+/* ── Expanders ───────────────────────────────────────────────────────────── */
+[data-testid="stExpander"] {
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 10px !important;
+    overflow: hidden;
+}
+[data-testid="stExpander"] summary {
+    font-weight: 500 !important;
+    font-size: 0.9rem !important;
+    padding: 0.75rem 1rem !important;
+    background: #f7fafc !important;
+}
+
+/* ── Alert / info / warning banners ─────────────────────────────────────── */
+[data-testid="stAlert"] {
+    border-radius: 10px !important;
+    border-left-width: 4px !important;
+    font-size: 0.88rem !important;
+}
+
+/* ── Chat messages ───────────────────────────────────────────────────────── */
+[data-testid="stChatMessage"] {
+    border-radius: 12px !important;
+    padding: 0.75rem 1rem !important;
+    margin-bottom: 0.5rem;
+}
+
+/* ── Caption text ────────────────────────────────────────────────────────── */
+.stCaption, [data-testid="stCaptionContainer"] {
+    font-size: 0.78rem !important;
+    color: #718096 !important;
+}
+
+/* ── Spinner ─────────────────────────────────────────────────────────────── */
+[data-testid="stSpinner"] {
+    color: #1a73e8 !important;
+}
+
+/* ── Hide Streamlit branding ─────────────────────────────────────────────── */
+#MainMenu { visibility: hidden; }
+footer    { visibility: hidden; }
+header    { visibility: hidden; }
+</style>
+""", unsafe_allow_html=True)
+
 
 # ---------------------------------------------------------------------------
 # Data loading (cached)

@@ -1,0 +1,16 @@
+[theme]
+# Primary: OCHA blue — professional, on-brand
+primaryColor        = "#1a73e8"
+
+# Backgrounds: deep navy sidebar, near-white main
+backgroundColor     = "#f8fafc"
+secondaryBackgroundColor = "#1e2a3a"
+
+# Text
+textColor           = "#1a202c"
+
+# Font: Inter — clean, widely readable
+font                = "sans serif"
+
+[server]
+headless            = true

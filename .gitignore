@@ -20,5 +20,5 @@ mlflow.db
 *.swp
 
 # Streamlit
-.streamlit/
+
 cmu-ai-master.skill
