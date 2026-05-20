@@ -123,31 +123,75 @@ h3 {
     font-weight: 500 !important;
 }
 
-/* ── Tabs ────────────────────────────────────────────────────────────────── */
+/* ── Sidebar widget inputs: force dark text so readable on white bg ───────── */
+[data-testid="stSidebar"] input,
+[data-testid="stSidebar"] textarea,
+[data-testid="stSidebar"] select,
+[data-testid="stSidebar"] [data-baseweb="select"] span,
+[data-testid="stSidebar"] [data-baseweb="select"] div,
+[data-testid="stSidebar"] [data-baseweb="input"] input,
+[data-testid="stSidebar"] [data-baseweb="base-input"] input,
+[data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] *,
+[data-testid="stSidebar"] .stNumberInput input {
+    color: #1a202c !important;
+}
+
+/* Selectbox placeholder and selected value */
+[data-testid="stSidebar"] [data-baseweb="select"] [data-testid="stMarkdownContainer"],
+[data-testid="stSidebar"] [class*="placeholder"],
+[data-testid="stSidebar"] [class*="singleValue"],
+[data-testid="stSidebar"] [class*="ValueContainer"] * {
+    color: #1a202c !important;
+}
+
+/* Slider value label */
+[data-testid="stSidebar"] [data-testid="stTickBarMax"],
+[data-testid="stSidebar"] [data-testid="stTickBarMin"],
+[data-testid="stSidebar"] .stSlider [data-testid="stMarkdownContainer"] p {
+    color: #cbd5e0 !important;
+}
+
+/* Number input +/- buttons */
+[data-testid="stSidebar"] [data-baseweb="base-input"] button {
+    color: #4a5568 !important;
+}
+
+/* Expander title in sidebar — ensure readable text */
+[data-testid="stSidebar"] [data-testid="stExpander"] summary,
+[data-testid="stSidebar"] [data-testid="stExpander"] summary span,
+[data-testid="stSidebar"] [data-testid="stExpander"] summary p {
+    color: #2d3748 !important;
+    font-weight: 500 !important;
+}
+
+/* ── Tabs — pill style, no underline indicator ───────────────────────────── */
 [data-testid="stTabs"] [role="tablist"] {
-    gap: 0.25rem;
-    border-bottom: 2px solid #e2e8f0;
-    padding-bottom: 0;
+    gap: 0.35rem;
+    background: #f1f5f9;
+    border-radius: 10px;
+    padding: 0.25rem;
+    border-bottom: none;
 }
 [data-testid="stTabs"] button[role="tab"] {
-    font-size: 0.85rem !important;
+    font-size: 0.84rem !important;
     font-weight: 500 !important;
-    padding: 0.5rem 1rem !important;
-    border-radius: 6px 6px 0 0 !important;
-    color: #718096 !important;
+    padding: 0.4rem 1.1rem !important;
+    border-radius: 7px !important;
+    color: #64748b !important;
     border: none !important;
     background: transparent !important;
     transition: all 0.15s ease;
 }
 [data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
-    color: #1a73e8 !important;
+    color: #1a202c !important;
     font-weight: 600 !important;
-    border-bottom: 2px solid #1a73e8 !important;
-    background: transparent !important;
+    background: #ffffff !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.10) !important;
+    border: none !important;
 }
-[data-testid="stTabs"] button[role="tab"]:hover {
-    color: #2d3748 !important;
-    background: #f7fafc !important;
+[data-testid="stTabs"] button[role="tab"]:hover:not([aria-selected="true"]) {
+    color: #334155 !important;
+    background: rgba(255,255,255,0.5) !important;
 }
 
 /* ── Dataframe / table ───────────────────────────────────────────────────── */
