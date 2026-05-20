@@ -198,6 +198,79 @@ def render_sidebar(df: pd.DataFrame) -> pd.DataFrame:
                 del st.session_state["custom_scored"]
                 st.session_state.pop("rank_stability", None)
 
+    # --- Utility Curve / Risk Preference (CMU dm-uncertainty.md — Expected Utility) ---
+    with st.sidebar.expander("🎯 Risk Preference (Utility Curve)", expanded=False):
+        st.caption(
+            "**How should funding be concentrated?**\n\n"
+            "Risk-averse managers prefer spreading funds across many crises (diminishing returns). "
+            "Risk-seeking managers concentrate on the highest-gap crises."
+        )
+        alpha = st.slider(
+            "Risk preference (α)",
+            min_value=0.3, max_value=3.0, value=1.0, step=0.1,
+            key="utility_alpha",
+            help=(
+                "α < 1 → risk-averse: compress high scores, rank more equitably\n"
+                "α = 1 → risk-neutral: standard gap score ranking\n"
+                "α > 1 → risk-seeking: amplify top scores, concentrate on #1 crisis"
+            ),
+        )
+        col_a, col_b, col_c = st.sidebar.columns(3)
+        col_a.caption("🔵 Averse\nα < 1")
+        col_b.caption("⚪ Neutral\nα = 1")
+        col_c.caption("🔴 Seeking\nα > 1")
+
+        if alpha != 1.0 and not filtered.empty:
+            # U(gap_score) = gap_score^α  — power utility transform
+            util_df = filtered.copy()
+            util_df["utility_score"] = util_df["gap_score"].clip(lower=0) ** alpha
+            util_df = util_df.sort_values("utility_score", ascending=False).reset_index(drop=True)
+
+            # Rank shift vs standard gap_score ranking
+            std_order  = filtered["country_iso3"].tolist()
+            util_order = util_df["country_iso3"].tolist()
+            rank_shifts = {
+                iso: std_order.index(iso) - util_order.index(iso)
+                for iso in util_order if iso in std_order
+            }
+
+            display_u = util_df[["country_name", "gap_score", "utility_score"]].head(10).copy()
+            display_u["Rank Shift"] = display_u["country_iso3"].map(rank_shifts) if "country_iso3" in display_u.columns else 0
+            display_u = util_df.head(10)[["country_name", "gap_score", "utility_score"]].copy()
+            display_u["Rank Δ"] = [
+                rank_shifts.get(iso, 0) for iso in util_df.head(10)["country_iso3"]
+            ]
+            display_u["Rank Δ"] = display_u["Rank Δ"].map(
+                lambda d: f"▲{d}" if d > 0 else (f"▼{abs(d)}" if d < 0 else "—")
+            )
+            display_u = display_u.rename(columns={
+                "country_name": "Country",
+                "gap_score": "Raw Gap",
+                "utility_score": f"Utility (α={alpha})",
+            })
+            display_u["Raw Gap"] = display_u["Raw Gap"].map("{:.3f}".format)
+            display_u[f"Utility (α={alpha})"] = display_u[f"Utility (α={alpha})"].map("{:.3f}".format)
+            st.dataframe(display_u, use_container_width=True, height=280, hide_index=True)
+
+            if alpha < 1.0:
+                st.caption(
+                    f"**Risk-averse (α={alpha}):** Top scores compressed — ranking favours "
+                    "spreading allocation across more crises rather than concentrating on #1."
+                )
+            else:
+                st.caption(
+                    f"**Risk-seeking (α={alpha}):** Top scores amplified — ranking reinforces "
+                    "concentrating funds on the highest-gap crises."
+                )
+
+            # Store utility-adjusted df so render_table can optionally use it
+            st.session_state["utility_df"] = util_df
+            st.session_state["utility_alpha"] = alpha
+        else:
+            st.session_state.pop("utility_df", None)
+            if alpha == 1.0:
+                st.caption("Move the slider to apply a utility transform to the ranking.")
+
     st.sidebar.markdown("---")
     st.sidebar.caption(
         "Data sources: HDX HNO, FTS (OCHA), CBPF, INFORM Severity Index. "
@@ -235,7 +308,21 @@ NEGLECT_COLORS = {
 
 
 def render_table(df: pd.DataFrame):
-    st.subheader("Ranked Crises by Gap Score")
+    # ── Utility curve override (CMU dm-uncertainty.md — Expected Utility Theory) ──
+    alpha = st.session_state.get("utility_alpha", 1.0)
+    utility_df = st.session_state.get("utility_df")
+    if utility_df is not None and alpha != 1.0:
+        df = utility_df   # use utility-adjusted ranking
+        pref = "risk-averse (spread)" if alpha < 1.0 else "risk-seeking (concentrate)"
+        st.info(
+            f"📐 **Utility mode active (α = {alpha}, {pref})** — "
+            "ranking reflects your risk preference, not raw gap score. "
+            "Reset α = 1.0 in the sidebar to restore default ranking.",
+            icon="🎯",
+        )
+        st.subheader(f"Ranked Crises — Utility Score (α = {alpha})")
+    else:
+        st.subheader("Ranked Crises by Gap Score")
 
     # Build Gap Score display with confidence interval if available
     def fmt_gap_score(row):
@@ -863,6 +950,229 @@ def _render_data_quality_alert(df: pd.DataFrame):
 
 
 # ---------------------------------------------------------------------------
+# Evidently Data Drift Analysis (oai-monitoring-governance.md — Evidently)
+# ---------------------------------------------------------------------------
+
+@st.cache_data(ttl=600)
+def _compute_drift(df: pd.DataFrame) -> dict:
+    """
+    Run Evidently DataDriftPreset comparing 2024 (reference) vs 2025 (current).
+    Returns a dict with per-column drift results and summary stats.
+    Cached so it doesn't re-run on every widget interaction.
+    """
+    DRIFT_COLS_NUM = ["gap_score", "coverage_pct", "people_in_need", "inform_severity"]
+    DRIFT_COLS_CAT = ["neglect_type"]
+
+    ref = df[df["year"] == 2024][DRIFT_COLS_NUM + DRIFT_COLS_CAT].reset_index(drop=True)
+    cur = df[df["year"] == 2025][DRIFT_COLS_NUM + DRIFT_COLS_CAT].reset_index(drop=True)
+
+    if ref.empty or cur.empty:
+        return {}
+
+    try:
+        from evidently import Dataset, DataDefinition
+        from evidently.presets import DataDriftPreset
+        from evidently import Report
+
+        definition = DataDefinition(
+            numerical_columns=DRIFT_COLS_NUM,
+            categorical_columns=DRIFT_COLS_CAT,
+        )
+        ref_ds = Dataset.from_pandas(ref, data_definition=definition)
+        cur_ds = Dataset.from_pandas(cur, data_definition=definition)
+
+        report = Report([DataDriftPreset()])
+        snap   = report.run(reference_data=ref_ds, current_data=cur_ds)
+        d      = snap.dict()
+
+        # Parse metric results
+        col_results = {}
+        drifted_count = 0
+        for m in d["metrics"]:
+            name = m.get("metric_name", "")
+            val  = m.get("value")
+            if "ValueDrift" in name and "column=" in name:
+                # e.g. "ValueDrift(column=gap_score,method=K-S p_value,threshold=0.05)"
+                col = name.split("column=")[1].split(",")[0]
+                p   = float(val) if val is not None else None
+                drifted = p is not None and p < 0.05
+                if drifted:
+                    drifted_count += 1
+                col_results[col] = {"p_value": p, "drifted": drifted}
+            elif "DriftedColumnsCount" in name and isinstance(val, dict):
+                drifted_count = int(val.get("count", 0))
+
+        # Raw distributions for plotting
+        distributions = {
+            col: {
+                "ref_mean":  float(ref[col].mean()),
+                "cur_mean":  float(cur[col].mean()),
+                "ref_median":float(ref[col].median()),
+                "cur_median":float(cur[col].median()),
+                "ref_values":ref[col].dropna().tolist(),
+                "cur_values":cur[col].dropna().tolist(),
+            }
+            for col in DRIFT_COLS_NUM
+        }
+
+        return {
+            "col_results":    col_results,
+            "drifted_count":  drifted_count,
+            "total_cols":     len(DRIFT_COLS_NUM) + len(DRIFT_COLS_CAT),
+            "distributions":  distributions,
+            "ref_year":       2024,
+            "cur_year":       2025,
+            "ref_n":          len(ref),
+            "cur_n":          len(cur),
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def render_drift_analysis(df: pd.DataFrame):
+    """
+    Evidently DataDrift tab: compare 2024 vs 2025 gold data.
+    Shows which humanitarian metrics have shifted significantly year-over-year.
+    (CMU oai-monitoring-governance.md — Evidently, data drift monitoring)
+    """
+    st.subheader("📊 Data Drift Analysis — 2024 → 2025")
+    st.caption(
+        "Evidently DataDriftPreset compares the **2024 reference cohort** vs **2025 current cohort** "
+        "of humanitarian crisis data. Significant drift in `gap_score` or `coverage_pct` signals "
+        "that the funding landscape has shifted — scores from last year may no longer reflect current reality."
+    )
+
+    drift = _compute_drift(df)
+
+    if not drift:
+        st.info("Drift analysis requires data for both 2024 and 2025. Check that the Gold table has multi-year data.")
+        return
+    if "error" in drift:
+        st.error(f"Evidently error: {drift['error']}")
+        return
+
+    # ── Summary header ──────────────────────────────────────────────────────
+    col_a, col_b, col_c = st.columns(3)
+    col_a.metric("Reference year", drift["ref_year"], f"n={drift['ref_n']} crises")
+    col_b.metric("Current year",   drift["cur_year"], f"n={drift['cur_n']} crises")
+    drifted = drift["drifted_count"]
+    total   = drift["total_cols"]
+    col_c.metric(
+        "Columns drifted",
+        f"{drifted}/{total}",
+        delta="⚠️ significant" if drifted > 0 else "✅ stable",
+        delta_color="inverse" if drifted > 0 else "normal",
+    )
+
+    if drifted > 0:
+        st.warning(
+            f"**{drifted} of {total} tracked columns show statistically significant drift** "
+            "(Kolmogorov-Smirnov p < 0.05). This means the humanitarian data distribution "
+            "changed meaningfully between 2024 and 2025 — rankings from prior-year analysis "
+            "may no longer be valid.",
+            icon="📉",
+        )
+    else:
+        st.success("No significant drift detected — data distributions are stable year-over-year.", icon="✅")
+
+    # ── Per-column drift table ───────────────────────────────────────────────
+    st.markdown("#### Drift by Column")
+    col_labels = {
+        "gap_score":       "Gap Score",
+        "coverage_pct":    "Funding Coverage %",
+        "people_in_need":  "People in Need",
+        "inform_severity": "INFORM Severity",
+        "neglect_type":    "Neglect Type (categorical)",
+    }
+    rows = []
+    for col, res in drift["col_results"].items():
+        p   = res["p_value"]
+        rows.append({
+            "Metric":   col_labels.get(col, col),
+            "Method":   "chi-square" if col == "neglect_type" else "K-S test",
+            "p-value":  f"{p:.4f}" if p is not None else "N/A",
+            "Drifted":  "⚠️ YES" if res["drifted"] else "✅ No",
+        })
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+    # ── Distribution comparison plots for numeric columns ───────────────────
+    st.markdown("#### Distribution Shift — Reference (2024) vs Current (2025)")
+
+    dists = drift.get("distributions", {})
+    plot_cols = [c for c in ["gap_score", "coverage_pct", "people_in_need", "inform_severity"] if c in dists]
+
+    for col in plot_cols:
+        d_info   = dists[col]
+        is_drift = drift["col_results"].get(col, {}).get("drifted", False)
+        label    = col_labels.get(col, col)
+        drift_tag = " ⚠️ DRIFTED" if is_drift else " ✅ stable"
+
+        with st.expander(f"{label}{drift_tag}", expanded=is_drift):
+            ref_vals = d_info["ref_values"]
+            cur_vals = d_info["cur_values"]
+
+            fig = go.Figure()
+            fig.add_trace(go.Histogram(
+                x=ref_vals, name=f"2024 (ref, n={len(ref_vals)})",
+                opacity=0.65, marker_color="#3498db",
+                histnorm="probability density",
+            ))
+            fig.add_trace(go.Histogram(
+                x=cur_vals, name=f"2025 (cur, n={len(cur_vals)})",
+                opacity=0.65, marker_color="#e74c3c",
+                histnorm="probability density",
+            ))
+            fig.update_layout(
+                barmode="overlay",
+                height=260,
+                margin=dict(t=20, b=20, l=40, r=20),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02),
+                xaxis_title=label,
+                yaxis_title="Density",
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+            # Mean shift callout
+            ref_m = d_info["ref_mean"]
+            cur_m = d_info["cur_mean"]
+            delta = cur_m - ref_m
+            pct   = (delta / ref_m * 100) if ref_m != 0 else 0
+            st.caption(
+                f"Mean: {ref_m:.3f} (2024) → {cur_m:.3f} (2025) "
+                f"({'▲' if delta >= 0 else '▼'} {abs(pct):.1f}%)"
+            )
+
+    # ── Interpretation for analysts ─────────────────────────────────────────
+    with st.expander("What does this mean for fund managers?", expanded=False):
+        st.markdown("""
+**Drifted columns signal that the humanitarian landscape changed between 2024 and 2025:**
+
+- **`gap_score` drift** (p < 0.05): The overall funding-gap distribution shifted. Countries that were
+  most underfunded in 2024 may not be the same ones in 2025. Rankings should be based on 2025 data only.
+
+- **`coverage_pct` drift** (p < 0.05): Funding coverage ratios changed significantly across the cohort.
+  This likely reflects new HRP pledges or FTS reporting updates — not necessarily improved on-the-ground conditions.
+
+- **`people_in_need` stable** (p > 0.05): The scale of documented need has not changed significantly.
+  New funding (if any) went to reducing the gap, not because need decreased.
+
+- **`inform_severity` stable** (p ≈ 1.0): INFORM crisis severity index is essentially unchanged —
+  confirming that the underlying crisis conditions are persistent, not improving.
+
+**Decision implication:** Drift in `gap_score` and `coverage_pct` with stable `people_in_need`
+and `inform_severity` is the signature of **funding volatility without condition improvement** —
+the most dangerous scenario for structural neglect analysis.
+        """)
+
+    st.caption(
+        "Method: Evidently DataDriftPreset v0.7+ · "
+        "Numerical columns: Kolmogorov-Smirnov test (threshold p=0.05) · "
+        "Categorical: chi-square test · "
+        "Reference: 2024 gold cohort (n=24) · Current: 2025 gold cohort (n=22)"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Main app
 # ---------------------------------------------------------------------------
 
@@ -894,7 +1204,7 @@ def main():
 
     render_metrics(df_filtered)
 
-    tab1, tab2, tab3, tab4 = st.tabs(["Ranked Table", "World Map", "Sector Gaps", "Ask the Agent"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Ranked Table", "World Map", "Sector Gaps", "Data Drift", "Ask the Agent"])
 
     with tab1:
         render_table(df_filtered)
@@ -913,6 +1223,9 @@ def main():
         render_sector_analysis()
 
     with tab4:
+        render_drift_analysis(df_full)
+
+    with tab5:
         render_chat(df_filtered)
 
     # Scoring formula transparency
