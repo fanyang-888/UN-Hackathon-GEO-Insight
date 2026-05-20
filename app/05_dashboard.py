@@ -131,6 +131,7 @@ def render_sidebar(df: pd.DataFrame) -> pd.DataFrame:
         st.caption(f"Normalized: gap={w_gap/total:.2f} need={w_need/total:.2f} sev={w_sev/total:.2f}")
         if st.button("Apply custom weights", key="apply_weights"):
             import sys as _sys2
+            from scipy.stats import spearmanr
             _sys2.path.insert(0, str(Path(__file__).resolve().parent.parent / "core"))
             from scoring_logic import score_dataframe
             custom_weights = {"funding_gap": w_gap/total, "need_scale": w_need/total, "severity": w_sev/total}
@@ -142,18 +143,60 @@ def render_sidebar(df: pd.DataFrame) -> pd.DataFrame:
                      "consecutive_years_underfunded","has_hrp","data_staleness_days"]
                 ].copy(), apply_pareto=False)
                 rescored["coverage_pct"] = rescored["coverage_ratio"] * 100
+
+                # ── Spearman ρ ranking stability (CMU dm-choice-mcdm.md §3) ──
+                # Compare rank order between default and custom weights
+                default_ranked = df_full_reloaded.sort_values("gap_score", ascending=False).reset_index(drop=True)
+                custom_ranked  = rescored.sort_values("gap_score", ascending=False).reset_index(drop=True)
+                # Align on country_iso3 for fair comparison
+                merged_ranks = default_ranked[["country_iso3"]].assign(default_rank=range(len(default_ranked)))
+                custom_rank_map = {row["country_iso3"]: i for i, row in custom_ranked.iterrows()}
+                merged_ranks["custom_rank"] = merged_ranks["country_iso3"].map(custom_rank_map)
+                merged_ranks = merged_ranks.dropna()
+                rho, p_val = spearmanr(merged_ranks["default_rank"], merged_ranks["custom_rank"])
+
+                # Flag which top-10 crises changed rank position
+                default_top10 = set(default_ranked.head(10)["country_iso3"])
+                custom_top10  = set(custom_ranked.head(10)["country_iso3"])
+                rank_changers = default_top10.symmetric_difference(custom_top10)
+
+                rescored["rank_changed"] = rescored["country_iso3"].isin(rank_changers)
                 st.session_state["custom_scored"] = rescored
+                st.session_state["rank_stability"] = {
+                    "rho": round(float(rho), 3),
+                    "rank_changers": sorted(rank_changers),
+                }
                 st.success(f"Rescored {len(rescored)} crises with custom weights.")
         if "custom_scored" in st.session_state:
             cs = st.session_state["custom_scored"]
-            st.dataframe(
-                cs[["country_name","gap_score","coverage_ratio"]].head(10)
-                .rename(columns={"country_name":"Country","gap_score":"Gap Score","coverage_ratio":"Coverage"})
-                .assign(**{"Coverage": lambda d: d["Coverage"].map("{:.1%}".format)}),
-                use_container_width=True, height=260
-            )
+
+            # ── Ranking stability badge ───────────────────────────────────────
+            stab = st.session_state.get("rank_stability", {})
+            if stab:
+                rho = stab["rho"]
+                changers = stab["rank_changers"]
+                if rho >= 0.90:
+                    stability_label = f"✅ High (ρ = {rho:.2f}) — top-10 order is robust"
+                elif rho >= 0.70:
+                    stability_label = f"⚠️ Moderate (ρ = {rho:.2f}) — some rank shifts"
+                else:
+                    stability_label = f"🔴 Low (ρ = {rho:.2f}) — ranking changes significantly"
+                st.info(f"**Ranking stability:** {stability_label}")
+                if changers:
+                    st.caption(f"Top-10 entries that changed: {', '.join(changers)}")
+
+            display_cs = cs[["country_name","gap_score","coverage_ratio","rank_changed"]].head(10).copy()
+            display_cs = display_cs.rename(columns={
+                "country_name":"Country","gap_score":"Gap Score",
+                "coverage_ratio":"Coverage","rank_changed":"Rank ↕"
+            })
+            display_cs["Coverage"] = display_cs["Coverage"].map("{:.1%}".format)
+            display_cs["Rank ↕"]  = display_cs["Rank ↕"].map(lambda x: "↕" if x else "")
+            st.dataframe(display_cs, use_container_width=True, height=280)
+            st.caption("↕ = this crisis moved in/out of top 10 vs default weights")
             if st.button("Clear custom weights", key="clear_weights"):
                 del st.session_state["custom_scored"]
+                st.session_state.pop("rank_stability", None)
 
     st.sidebar.markdown("---")
     st.sidebar.caption(
@@ -738,14 +781,60 @@ def render_chat(df_filtered: pd.DataFrame):
         with st.chat_message("assistant"):
             with st.spinner("Analyzing humanitarian data …"):
                 try:
-                    result = run_query(user_input)
-                    response = result["response_text"]
+                    result        = run_query(user_input)
+                    response      = result["response_text"]
+                    confidence    = result.get("confidence_level", "medium")
                     if result.get("query_rationale"):
                         response += f"\n\n---\n*Query interpretation: {result['query_rationale']}*"
+                    agent_error   = None
                 except Exception as e:
-                    response = f"Error running agent: {e}\n\nMake sure the Gold table exists (run 03_gold_scoring.py first)."
+                    response      = f"Error running agent: {e}\n\nMake sure the Gold table exists (run 03_gold_scoring.py first)."
+                    confidence    = "low"
+                    agent_error   = str(e)
+
+            # ── Low-confidence escalation (CMU agentic-tech.md — human checkpoint) ──
+            _response_contains_warning = (
+                "LOW CONFIDENCE" in response or "data quality warning" in response.lower()
+            )
+            if confidence == "low" or _response_contains_warning:
+                st.warning(
+                    "⚠️ **Low-confidence response** — the agent flagged data quality issues "
+                    "with this result. Figures may be based on stale or incomplete HNO/FTS data. "
+                    "Verify against the latest HRP report before using in allocation decisions.",
+                    icon="⚠️",
+                )
+                _conf_badge = "🔴 LOW"
+            elif confidence == "medium":
+                _conf_badge = "🟡 MEDIUM"
+            else:
+                _conf_badge = "🟢 HIGH"
+
             st.markdown(response)
-            st.session_state.chat_history.append({"role": "assistant", "content": response})
+            st.caption(f"Confidence: {_conf_badge}")
+
+            # ── Feedback button → eval_feedback.jsonl (CMU aimd-scaling-evaluation.md) ──
+            # Negative traces automatically become new eval golden cases.
+            _msg_idx = len(st.session_state.chat_history)
+            _fb_key  = f"thumbsdown_{_msg_idx}"
+            if st.button("👎 Flag this response", key=_fb_key, help="Mark as incorrect / unhelpful — adds to eval dataset"):
+                _feedback_path = _HERE / "data" / "eval_feedback.jsonl"
+                _feedback_path.parent.mkdir(parents=True, exist_ok=True)
+                _entry = {
+                    "ts":       time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                    "query":    user_input,
+                    "response": response[:2000],
+                    "confidence": confidence,
+                    "reason":   "user_flagged",
+                }
+                with open(_feedback_path, "a") as _f:
+                    _f.write(json.dumps(_entry) + "\n")
+                st.success("Flagged — this response will be included in the next evaluation run.")
+
+            st.session_state.chat_history.append({
+                "role":       "assistant",
+                "content":    response,
+                "confidence": confidence,
+            })
 
 
 # ---------------------------------------------------------------------------
@@ -861,6 +950,15 @@ Data >18 months old → figures may not reflect current conditions.
 
 **Data window note:** `consecutive_years_underfunded` is computed from available data (2024–2026 only).
 A value of 3 means underfunded across all 3 years in our dataset — not necessarily across all historical years.
+
+**⚠️ MCDM design note — preferential independence:** In a strict MCDM weighted sum, the preference
+weight for criterion A must not depend on the value of criterion B (preferential independence axiom).
+This formula deliberately violates that: `need_scale` and `severity` only affect the score when a
+funding gap exists — a fully-funded crisis scores 0 regardless of PIN or INFORM severity. This is
+an intentional design choice: *"overlooked"* requires both humanitarian need **and** a funding shortfall.
+A crisis receiving 100% of requested funds is, by definition, not overlooked — even if it is large or severe.
+This interaction term is appropriate for this application domain, but users should be aware that the
+three dimensions are **not evaluated independently**.
         """)
 
 
