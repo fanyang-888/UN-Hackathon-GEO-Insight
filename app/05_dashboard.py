@@ -73,22 +73,30 @@ h3 {
 /* ── Metric cards ────────────────────────────────────────────────────────── */
 [data-testid="stMetric"] {
     background: #ffffff;
-    border: 1px solid #e2e8f0;
+    border: 1px solid #e8edf3;
+    border-left: 4px solid #94a3b8;   /* default accent — overridden per-card below */
     border-radius: 12px;
     padding: 1rem 1.25rem;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
 }
+/* Color the left border of each metric card in order */
+[data-testid="stMetric"]:nth-child(1) { border-left-color: #3b82f6 !important; }
+[data-testid="stMetric"]:nth-child(2) { border-left-color: #f59e0b !important; }
+[data-testid="stMetric"]:nth-child(3) { border-left-color: #ef4444 !important; }
+[data-testid="stMetric"]:nth-child(4) { border-left-color: #8b5cf6 !important; }
+
 [data-testid="stMetricLabel"] {
-    font-size: 0.75rem !important;
-    font-weight: 500 !important;
+    font-size: 0.72rem !important;
+    font-weight: 600 !important;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: #718096 !important;
+    letter-spacing: 0.07em;
+    color: #94a3b8 !important;
 }
 [data-testid="stMetricValue"] {
-    font-size: 1.6rem !important;
+    font-size: 1.75rem !important;
     font-weight: 700 !important;
-    color: #1a202c !important;
+    color: #0f172a !important;
+    line-height: 1.15 !important;
 }
 [data-testid="stMetricDelta"] {
     font-size: 0.78rem !important;
@@ -164,13 +172,21 @@ h3 {
     font-weight: 500 !important;
 }
 
-/* ── Tabs — pill style, no underline indicator ───────────────────────────── */
+/* ── Tabs — pill style, nuclear override of Streamlit's underline ────────── */
 [data-testid="stTabs"] [role="tablist"] {
-    gap: 0.35rem;
-    background: #f1f5f9;
-    border-radius: 10px;
-    padding: 0.25rem;
-    border-bottom: none;
+    gap: 0.35rem !important;
+    background: #eef2f7 !important;
+    border-radius: 10px !important;
+    padding: 0.25rem !important;
+    border-bottom: none !important;
+    border: none !important;
+}
+/* Kill the default blue underline Streamlit adds via pseudo-element */
+[data-testid="stTabs"] button[role="tab"]::after,
+[data-testid="stTabs"] button[role="tab"]::before {
+    display: none !important;
+    border: none !important;
+    background: none !important;
 }
 [data-testid="stTabs"] button[role="tab"] {
     font-size: 0.84rem !important;
@@ -179,19 +195,28 @@ h3 {
     border-radius: 7px !important;
     color: #64748b !important;
     border: none !important;
+    border-bottom: none !important;
+    outline: none !important;
     background: transparent !important;
-    transition: all 0.15s ease;
+    transition: all 0.15s ease !important;
+    text-decoration: none !important;
 }
 [data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
     color: #1a202c !important;
     font-weight: 600 !important;
     background: #ffffff !important;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.10) !important;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.12) !important;
     border: none !important;
+    border-bottom: none !important;
 }
 [data-testid="stTabs"] button[role="tab"]:hover:not([aria-selected="true"]) {
     color: #334155 !important;
-    background: rgba(255,255,255,0.5) !important;
+    background: rgba(255,255,255,0.55) !important;
+}
+/* Tab content area: remove top border */
+[data-testid="stTabs"] [role="tabpanel"] {
+    border-top: none !important;
+    padding-top: 1rem !important;
 }
 
 /* ── Dataframe / table ───────────────────────────────────────────────────── */
@@ -243,9 +268,11 @@ h3 {
 
 /* ── Alert / info / warning banners ─────────────────────────────────────── */
 [data-testid="stAlert"] {
-    border-radius: 10px !important;
+    border-radius: 8px !important;
     border-left-width: 4px !important;
-    font-size: 0.88rem !important;
+    font-size: 0.83rem !important;
+    padding: 0.6rem 1rem !important;
+    line-height: 1.5 !important;
 }
 
 /* ── Chat messages ───────────────────────────────────────────────────────── */
@@ -619,7 +646,7 @@ def render_table(df: pd.DataFrame):
                 lambda x: f"{x:.1f}%" if pd.notna(x) else "N/A"
             )
 
-    st.dataframe(table, use_container_width=True, height=380)
+    st.dataframe(table, use_container_width=True, height=380, hide_index=True)
 
     # Note on 0%* assumption
     if display_df["coverage_pct"].eq(0).any() and (~display_df.get("has_hrp", pd.Series([True]*len(display_df))).fillna(True)).any():
