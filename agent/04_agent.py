@@ -25,6 +25,10 @@ import mlflow
 
 load_dotenv()
 
+# Explicitly set tracking URI so traces work whether launched from CLI or Streamlit
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+_MLFLOW_DB = _PROJECT_ROOT / "mlflow.db"
+mlflow.set_tracking_uri(f"sqlite:///{_MLFLOW_DB}")
 mlflow.set_experiment("geo-insight-agent")
 
 # Ensure agent/ dir is on sys.path so rag_search can be imported regardless of cwd

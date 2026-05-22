@@ -1,0 +1,1211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Geo-Insight — Hackathon Presentation</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&family=Playfair+Display:ital,wght@0,700;0,900;1,700;1,900&display=swap" rel="stylesheet"/>
+<style>
+* { box-sizing:border-box; margin:0; padding:0; }
+
+:root {
+  --cream:   #f7f3ed;
+  --dark:    #18120e;
+  --red:     #d4380d;
+  --mid:     #5c4a3a;
+  --border:  #1a1612;
+  --muted:   #9e8a78;
+  --light:   #ede8e1;
+}
+
+html, body {
+  width:100%; height:100%;
+  background:#2a2015;
+  font-family:'Inter',sans-serif;
+  overflow:hidden;
+}
+
+/* ── DECK CONTAINER ────────────────────────────── */
+#deck {
+  width:100%; height:100%;
+  display:flex; align-items:center; justify-content:center;
+}
+
+.slide {
+  display:none;
+  width:1280px; height:720px;
+  position:relative;
+  background:var(--cream);
+  border:4px solid var(--border);
+  flex-shrink:0;
+}
+.slide.active { display:flex; }
+
+/* ── COMMON LAYOUT: sidebar + main ───────────────*/
+.slide-inner {
+  display:grid;
+  grid-template-columns:220px 1fr;
+  width:100%; height:100%;
+  overflow:hidden;
+}
+
+/* SIDEBAR */
+.sb {
+  background:var(--dark);
+  padding:2rem 1.4rem;
+  display:flex;
+  flex-direction:column;
+  border-right:4px solid var(--border);
+  flex-shrink:0;
+}
+.sb-brand-sub {
+  font-size:.58rem; font-weight:700; letter-spacing:.18em;
+  text-transform:uppercase; color:#4a3828; margin-bottom:.3rem;
+}
+.sb-brand {
+  font-size:1.2rem; font-weight:900;
+  color:var(--cream); letter-spacing:-.02em; line-height:1.15;
+  margin-bottom:1.6rem;
+}
+.sb-brand em { font-style:normal; color:var(--red); }
+.sb-nav { flex:1; }
+.sb-item {
+  display:flex; align-items:center; gap:.5rem;
+  padding:.45rem .6rem;
+  font-size:.68rem; font-weight:600; color:#4a3828;
+  text-transform:uppercase; letter-spacing:.07em;
+  border-left:3px solid transparent;
+  margin-bottom:.08rem;
+}
+.sb-item.active {
+  color:var(--cream);
+  border-left-color:var(--red);
+  background:rgba(212,56,13,.12);
+}
+.sb-item .dot {
+  width:6px; height:6px; border-radius:50%; background:currentColor; flex-shrink:0;
+}
+.sb-footer {
+  font-size:.58rem; color:#3a2a1e; letter-spacing:.06em;
+  text-transform:uppercase; margin-top:auto;
+  padding-top:1rem;
+  border-top:1px solid #2a1e14;
+  line-height:1.9;
+}
+
+/* MAIN AREA */
+.main {
+  display:flex;
+  flex-direction:column;
+  padding:2rem 2.4rem;
+  overflow:hidden;
+}
+.slide-num {
+  font-size:.6rem; font-weight:700; letter-spacing:.18em;
+  text-transform:uppercase; color:var(--muted);
+  margin-bottom:.4rem;
+}
+.slide-title {
+  font-family:'Playfair Display',serif;
+  font-size:2rem; font-weight:900; line-height:1.1;
+  color:var(--border); margin-bottom:.3rem;
+  letter-spacing:-.02em;
+}
+.slide-title em { font-style:italic; color:var(--red); }
+.slide-sub {
+  font-size:.8rem; color:var(--mid); margin-bottom:1.4rem;
+  font-weight:500; letter-spacing:.02em;
+}
+
+/* divider */
+.hdiv {
+  height:3px; background:var(--border);
+  margin-bottom:1.4rem;
+}
+
+/* content body */
+.body { flex:1; overflow:hidden; }
+
+/* ── UTILITY CLASSES ───────────────────────────── */
+.tag {
+  display:inline-block;
+  font-size:.58rem; font-weight:700; letter-spacing:.12em;
+  text-transform:uppercase;
+  padding:.2rem .55rem;
+  border:1.5px solid currentColor;
+}
+.tag-red { color:var(--red); border-color:var(--red); background:rgba(212,56,13,.08); }
+.tag-dark { color:var(--dark); border-color:var(--dark); }
+.tag-muted { color:var(--muted); border-color:var(--muted); }
+.tag-green { color:#3d7a4a; border-color:#3d7a4a; background:rgba(61,122,74,.08); }
+
+.mono {
+  font-family:'JetBrains Mono',monospace;
+  font-size:.78rem;
+}
+
+/* grid helpers */
+.grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:1.2rem; }
+.grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem; }
+
+/* card */
+.card {
+  border:2px solid var(--border);
+  padding:1rem 1.2rem;
+  background:#fff9f3;
+}
+.card-label {
+  font-size:.6rem; font-weight:700; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--muted); margin-bottom:.4rem;
+}
+.card-val {
+  font-size:1.6rem; font-weight:900; color:var(--border); line-height:1;
+  font-family:'Playfair Display',serif;
+}
+.card-val em { font-style:normal; color:var(--red); }
+.card-desc {
+  font-size:.7rem; color:var(--mid); margin-top:.35rem; line-height:1.5;
+}
+
+/* table */
+.tbl { width:100%; border-collapse:collapse; font-size:.73rem; }
+.tbl th {
+  background:var(--dark); color:var(--cream);
+  font-size:.6rem; font-weight:700; letter-spacing:.1em;
+  text-transform:uppercase; padding:.5rem .7rem;
+  text-align:left;
+}
+.tbl td {
+  padding:.45rem .7rem;
+  border-bottom:1px solid var(--light);
+  color:var(--border);
+  vertical-align:top;
+}
+.tbl tr:nth-child(even) td { background:#f0ebe3; }
+.tbl .red { color:var(--red); font-weight:700; }
+.tbl .muted { color:var(--muted); font-size:.65rem; }
+
+/* pipeline node */
+.pipe {
+  display:flex; align-items:center; gap:0;
+}
+.pipe-node {
+  flex:1;
+  border:2px solid var(--border);
+  background:#fff9f3;
+  padding:.65rem .8rem;
+  text-align:center;
+  font-size:.68rem; font-weight:700;
+  color:var(--border);
+  text-transform:uppercase; letter-spacing:.06em;
+  position:relative;
+}
+.pipe-node.hi { background:var(--dark); color:var(--cream); }
+.pipe-node.acc { background:var(--red); color:#fff; border-color:var(--red); }
+.pipe-arrow {
+  width:22px; flex-shrink:0;
+  font-size:.9rem; color:var(--red); text-align:center;
+  font-weight:900; line-height:1;
+}
+
+/* formula box */
+.formula-box {
+  background:var(--dark);
+  color:#f7f3ed;
+  font-family:'JetBrains Mono',monospace;
+  font-size:.76rem;
+  padding:1rem 1.4rem;
+  border-left:4px solid var(--red);
+  line-height:2;
+}
+.formula-box .comment { color:#5c4a3a; }
+.formula-box .hl { color:#d4380d; font-weight:700; }
+.formula-box .green { color:#7ec88a; }
+
+/* badge */
+.badge {
+  font-size:.58rem; font-weight:700; letter-spacing:.1em;
+  text-transform:uppercase; padding:.15rem .45rem;
+  border-radius:2px;
+}
+.badge-green { background:#d6f0dc; color:#2a6636; }
+.badge-amber { background:#fdf0d5; color:#8a5a00; }
+.badge-red   { background:#fde8e3; color:#8b2000; }
+
+/* quote block */
+.quote {
+  border-left:4px solid var(--red);
+  padding:.8rem 1.2rem;
+  background:#fff9f3;
+  font-family:'Playfair Display',serif;
+  font-style:italic;
+  font-size:1rem;
+  color:var(--border);
+  line-height:1.6;
+}
+.quote cite {
+  display:block; margin-top:.5rem;
+  font-family:'Inter',sans-serif; font-style:normal;
+  font-size:.65rem; font-weight:700; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--muted);
+}
+
+/* ── NAVIGATION ─────────────────────────────────*/
+#nav {
+  position:fixed; bottom:1.5rem; left:50%; transform:translateX(-50%);
+  display:flex; gap:.6rem; align-items:center;
+  background:var(--dark); border:2px solid var(--border);
+  padding:.5rem 1rem;
+}
+#nav button {
+  background:none; border:none; color:var(--muted);
+  font-family:'Inter',sans-serif; font-size:.7rem; font-weight:700;
+  letter-spacing:.08em; text-transform:uppercase;
+  cursor:pointer; padding:.25rem .5rem;
+  transition:color .15s;
+}
+#nav button:hover { color:var(--red); }
+#nav .sep { color:#3a2a1e; }
+#slide-counter { color:var(--muted); font-size:.65rem; font-weight:700; letter-spacing:.1em; min-width:3rem; text-align:center; }
+
+/* img placeholder */
+.img-ph {
+  border:2px dashed var(--muted);
+  background:var(--light);
+  display:flex; align-items:center; justify-content:center;
+  flex-direction:column; gap:.4rem;
+  color:var(--muted);
+  font-size:.65rem; font-weight:700; letter-spacing:.1em;
+  text-transform:uppercase;
+}
+.img-ph svg { opacity:.3; }
+
+/* score bar */
+.score-bar-wrap { margin:.25rem 0; }
+.score-bar-bg { height:6px; background:var(--light); border:1px solid #ddd5ca; }
+.score-bar-fill { height:100%; background:var(--red); }
+
+</style>
+</head>
+<body>
+
+<div id="deck">
+
+<!-- ═══════════════════════════════════════════════
+     SLIDE 0 — Cover
+════════════════════════════════════════════════ -->
+<div class="slide active" id="s0">
+  <div style="display:grid;grid-template-columns:1fr 1fr;width:100%;height:100%;">
+
+    <!-- LEFT: dark panel -->
+    <div style="background:var(--dark);padding:3rem 3rem 2.5rem;display:flex;flex-direction:column;justify-content:space-between;border-right:4px solid var(--border);">
+      <div>
+        <div style="font-size:.62rem;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:#4a3828;margin-bottom:1rem;">UNOCHA Geo-Insight Hackathon · May 2026</div>
+        <div style="font-family:'Playfair Display',serif;font-size:3.8rem;font-weight:900;line-height:1;color:var(--cream);letter-spacing:-.03em;">GEO-<span style="color:var(--red);">INSIGHT</span></div>
+        <div style="width:60px;height:4px;background:var(--red);margin:1.2rem 0;"></div>
+        <div style="font-family:'Playfair Display',serif;font-style:italic;font-size:1.35rem;color:var(--cream);line-height:1.4;max-width:340px;">Which Crises Are Most Overlooked?</div>
+        <div style="margin-top:1rem;font-size:.82rem;color:#5c4a3a;line-height:1.7;max-width:340px;">An agentic command center surfacing mismatches between humanitarian need and funding coverage — across 77 active crises worldwide.</div>
+      </div>
+      <div>
+        <div style="height:1px;background:#2a1e14;margin-bottom:1.2rem;"></div>
+        <div style="font-size:.65rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#4a3828;margin-bottom:.6rem;">Submitted by</div>
+        <div style="font-size:1.1rem;font-weight:800;color:var(--cream);letter-spacing:-.01em;">Fan Yang</div>
+        <div style="font-size:.72rem;color:#5c4a3a;margin-top:.2rem;">CMU AIM · Solo Build · May 18–21, 2026</div>
+      </div>
+    </div>
+
+    <!-- RIGHT: cream panel -->
+    <div style="background:var(--cream);padding:2.5rem 2.5rem;display:flex;flex-direction:column;gap:1.2rem;">
+      <!-- map preview -->
+      <div style="border:3px solid var(--border);overflow:hidden;flex:1;position:relative;">
+        <img src="img/worldmap_crop.png" style="width:100%;height:100%;object-fit:cover;object-position:center 20%;" alt="Gap Score World Map"/>
+        <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(24,18,14,0.78);padding:.45rem .8rem;">
+          <div style="font-size:.6rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--cream);">Gap Score World Map · Red = Most Overlooked · 77 Countries</div>
+        </div>
+      </div>
+      <!-- stat row -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:.8rem;">
+        <div style="text-align:center;border:2px solid var(--border);padding:.6rem .3rem;background:#fff9f3;">
+          <div style="font-family:'Playfair Display',serif;font-size:1.9rem;font-weight:900;color:var(--red);line-height:1;">77</div>
+          <div style="font-size:.52rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:.2rem;">Countries</div>
+        </div>
+        <div style="text-align:center;border:2px solid var(--border);padding:.6rem .3rem;background:#fff9f3;">
+          <div style="font-family:'Playfair Display',serif;font-size:1.9rem;font-weight:900;color:var(--red);line-height:1;">229M</div>
+          <div style="font-size:.52rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:.2rem;">People in Need</div>
+        </div>
+        <div style="text-align:center;border:2px solid var(--border);padding:.6rem .3rem;background:#fff9f3;">
+          <div style="font-family:'Playfair Display',serif;font-size:1.9rem;font-weight:900;color:var(--red);line-height:1;">8</div>
+          <div style="font-size:.52rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:.2rem;">Structural Neglect</div>
+        </div>
+        <div style="text-align:center;border:2px solid var(--border);padding:.6rem .3rem;background:#fff9f3;">
+          <div style="font-family:'Playfair Display',serif;font-size:1.9rem;font-weight:900;color:var(--red);line-height:1;">6</div>
+          <div style="font-size:.52rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:.2rem;">Agent Tools</div>
+        </div>
+      </div>
+      <!-- tags -->
+      <div style="display:flex;flex-wrap:wrap;gap:.4rem;">
+        <span class="tag tag-red">Claude claude-sonnet-4-6</span>
+        <span class="tag tag-dark">Medallion Pipeline</span>
+        <span class="tag tag-dark">MLflow Tracing</span>
+        <span class="tag tag-dark">Monte Carlo CI</span>
+        <span class="tag tag-muted">HDX · FTS · INFORM</span>
+        <span class="tag tag-muted">Responsible AI Scorecard</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════
+     SLIDE 1 — Title & Problem
+════════════════════════════════════════════════ -->
+<div class="slide" id="s1">
+  <div class="slide-inner">
+    <div class="sb">
+      <div class="sb-brand-sub">UNOCHA Hackathon 2026</div>
+      <div class="sb-brand">GEO-<em>INSIGHT</em></div>
+      <div class="sb-nav">
+        <div class="sb-item active"><span class="dot"></span>Problem</div>
+        <div class="sb-item"><span class="dot"></span>Architecture</div>
+        <div class="sb-item"><span class="dot"></span>Gap Scoring</div>
+        <div class="sb-item"><span class="dot"></span>Data Sources</div>
+        <div class="sb-item"><span class="dot"></span>Demo</div>
+        <div class="sb-item"><span class="dot"></span>Limitations</div>
+        <div class="sb-item"><span class="dot"></span>Workflow Fit</div>
+      </div>
+      <div class="sb-footer">
+        Solo Build · 4 Days<br>
+        May 18–21, 2026
+      </div>
+    </div>
+
+    <div class="main">
+      <div class="slide-num">01 / 07</div>
+      <div class="slide-title">Which Crises Are<br><em>Most Overlooked?</em></div>
+      <div class="slide-sub">Surfacing mismatches between humanitarian need and funding coverage</div>
+      <div class="hdiv"></div>
+
+      <div class="body">
+        <div class="grid-2" style="height:100%;gap:1.6rem;">
+
+          <!-- left col -->
+          <div style="display:flex;flex-direction:column;gap:1rem;">
+            <div class="card">
+              <div class="card-label">The Problem</div>
+              <div style="font-size:.8rem;color:var(--border);line-height:1.7;">
+                Humanitarian data mixes two very different signals: <strong>objective severity</strong> (scale of need) and <strong>funding coverage</strong> (what's actually resourced). Without a system to combine them, critical gaps go unnoticed.
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-label">Example queries coordinators ask</div>
+              <div style="display:flex;flex-direction:column;gap:.45rem;margin-top:.2rem;">
+                <div style="font-size:.72rem;color:var(--border);padding:.3rem .5rem;background:var(--light);border-left:2px solid var(--red);">"Which crises have the most people in need but lowest fund allocations?"</div>
+                <div style="font-size:.72rem;color:var(--border);padding:.3rem .5rem;background:var(--light);border-left:2px solid var(--muted);">"Are there countries where funding received is under 10%?"</div>
+                <div style="font-size:.72rem;color:var(--border);padding:.3rem .5rem;background:var(--light);border-left:2px solid var(--muted);">"Which regions are consistently underfunded across 3+ years?"</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- right col: stat cards -->
+          <div style="display:flex;flex-direction:column;gap:.8rem;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.8rem;">
+              <div class="card">
+                <div class="card-label">Countries Tracked</div>
+                <div class="card-val"><em>77</em></div>
+                <div class="card-desc">Active crises, 2 data tiers</div>
+              </div>
+              <div class="card">
+                <div class="card-label">People in Need</div>
+                <div class="card-val"><em>229</em>M</div>
+                <div class="card-desc">HNO-tier countries</div>
+              </div>
+              <div class="card">
+                <div class="card-label">Avg. Coverage</div>
+                <div class="card-val"><em>38</em>%</div>
+                <div class="card-desc">Funding received / requested</div>
+              </div>
+              <div class="card">
+                <div class="card-label">Structural Neglect</div>
+                <div class="card-val"><em>8</em></div>
+                <div class="card-desc">3+ consecutive underfunded years</div>
+              </div>
+            </div>
+
+            <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.4rem;">
+              <span class="tag tag-red">Claude ReAct Agent</span>
+              <span class="tag tag-dark">Medallion Pipeline</span>
+              <span class="tag tag-dark">MLflow Tracing</span>
+              <span class="tag tag-muted">Responsible AI Scorecard</span>
+            </div>
+
+            <div class="quote" style="font-size:.82rem;">
+              "The goal is tools that help decision-makers ask better questions — not tools that make choices for them."
+              <cite>— UNOCHA Geo-Insight Challenge Brief</cite>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════
+     SLIDE 2 — Architecture
+════════════════════════════════════════════════ -->
+<div class="slide" id="s2">
+  <div class="slide-inner">
+    <div class="sb">
+      <div class="sb-brand-sub">UNOCHA Hackathon 2026</div>
+      <div class="sb-brand">GEO-<em>INSIGHT</em></div>
+      <div class="sb-nav">
+        <div class="sb-item"><span class="dot"></span>Problem</div>
+        <div class="sb-item active"><span class="dot"></span>Architecture</div>
+        <div class="sb-item"><span class="dot"></span>Gap Scoring</div>
+        <div class="sb-item"><span class="dot"></span>Data Sources</div>
+        <div class="sb-item"><span class="dot"></span>Demo</div>
+        <div class="sb-item"><span class="dot"></span>Limitations</div>
+        <div class="sb-item"><span class="dot"></span>Workflow Fit</div>
+      </div>
+      <div class="sb-footer">Solo Build · 4 Days<br>May 18–21, 2026</div>
+    </div>
+
+    <div class="main">
+      <div class="slide-num">02 / 07</div>
+      <div class="slide-title">End-to-End<br><em>Architecture</em></div>
+      <div class="slide-sub">Medallion pipeline · Claude ReAct agent · Streamlit dashboard</div>
+      <div class="hdiv"></div>
+
+      <div class="body" style="display:flex;flex-direction:column;gap:1.2rem;">
+
+        <!-- pipeline -->
+        <div class="pipe">
+          <div class="pipe-node" style="font-size:.6rem;">HDX HAPI<br><span style="color:var(--muted);font-size:.56rem;font-weight:400;">HNO · HRP · INFORM</span></div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-node" style="font-size:.6rem;">FTS API<br><span style="color:var(--muted);font-size:.56rem;font-weight:400;">Funding flows · Plans</span></div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-node hi">Bronze<br><span style="color:#5c4a3a;font-size:.56rem;font-weight:400;">Raw Delta tables</span></div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-node hi">Silver<br><span style="color:#5c4a3a;font-size:.56rem;font-weight:400;">77 countries · 2 tiers</span></div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-node acc">Gold<br><span style="font-size:.56rem;font-weight:400;opacity:.85;">Gap scores · ranked</span></div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-node hi">Claude Agent<br><span style="color:#5c4a3a;font-size:.56rem;font-weight:400;">6 tools · ReAct</span></div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-node" style="font-size:.6rem;">Streamlit UI<br><span style="color:var(--muted);font-size:.56rem;font-weight:400;">6 tabs · chat · map</span></div>
+        </div>
+
+        <!-- two-col detail -->
+        <div class="grid-2" style="gap:1rem;flex:1;">
+
+          <div style="display:flex;flex-direction:column;gap:.8rem;">
+            <div class="card">
+              <div class="card-label">Two-Tier Data Model</div>
+              <table class="tbl" style="margin-top:.3rem;">
+                <tr>
+                  <th>Tier</th><th>Countries</th><th>Signals</th>
+                </tr>
+                <tr>
+                  <td><span class="badge badge-green">HNO</span></td>
+                  <td>24</td>
+                  <td style="font-size:.65rem;">Full gap score · PIN · sector breakdown</td>
+                </tr>
+                <tr>
+                  <td><span class="badge badge-amber">FTS proxy</span></td>
+                  <td>53</td>
+                  <td style="font-size:.65rem;">Funding gap + severity · PIN = N/A</td>
+                </tr>
+              </table>
+            </div>
+
+            <div class="card">
+              <div class="card-label">Agent Tools (6)</div>
+              <div style="display:flex;flex-direction:column;gap:.3rem;margin-top:.2rem;">
+                <div style="font-size:.68rem;color:var(--border);"><span class="mono" style="color:var(--red);">decompose_query</span> · NL → structured filters</div>
+                <div style="font-size:.68rem;color:var(--border);"><span class="mono" style="color:var(--red);">query_gold_table</span> · parameterized SQL</div>
+                <div style="font-size:.68rem;color:var(--border);"><span class="mono" style="color:var(--red);">semantic_search</span> · embedding retrieval</div>
+                <div style="font-size:.68rem;color:var(--border);"><span class="mono" style="color:var(--red);">generate_briefing_notes</span> · per-crisis memo</div>
+                <div style="font-size:.68rem;color:var(--border);"><span class="mono" style="color:var(--red);">validate_ranking</span> · sanity checks</div>
+                <div style="font-size:.68rem;color:var(--border);"><span class="mono" style="color:var(--red);">red_team_challenge</span> · counter-arguments</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:.8rem;">
+            <div class="card">
+              <div class="card-label">Key Design Choices</div>
+              <div style="display:flex;flex-direction:column;gap:.5rem;margin-top:.3rem;">
+                <div style="font-size:.72rem;line-height:1.5;color:var(--border);">
+                  <strong>Medallion architecture</strong> — Bronze → Silver → Gold separation lets scoring logic evolve without re-ingesting raw data
+                </div>
+                <div style="font-size:.72rem;line-height:1.5;color:var(--border);">
+                  <strong>MLflow tracing</strong> — every agent query traced with root span + per-tool child spans; auditable by judges
+                </div>
+                <div style="font-size:.72rem;line-height:1.5;color:var(--border);">
+                  <strong>Hybrid scoring</strong> — structured ratios (funding gap) + contextual signals (INFORM, neglect, donor HHI)
+                </div>
+              </div>
+            </div>
+            <div class="card" style="background:var(--dark);border-color:var(--dark);">
+              <div class="card-label" style="color:#4a3828;">Tech Stack</div>
+              <div style="display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.3rem;">
+                <span class="tag" style="color:#f7f3ed;border-color:#3a2a1e;font-size:.56rem;">Claude claude-sonnet-4-6</span>
+                <span class="tag" style="color:#f7f3ed;border-color:#3a2a1e;font-size:.56rem;">Streamlit</span>
+                <span class="tag" style="color:#f7f3ed;border-color:#3a2a1e;font-size:.56rem;">MLflow</span>
+                <span class="tag" style="color:#f7f3ed;border-color:#3a2a1e;font-size:.56rem;">Delta Lake</span>
+                <span class="tag" style="color:#f7f3ed;border-color:#3a2a1e;font-size:.56rem;">Plotly</span>
+                <span class="tag" style="color:#f7f3ed;border-color:#3a2a1e;font-size:.56rem;">Pandas</span>
+                <span class="tag" style="color:#d4380d;border-color:#d4380d;font-size:.56rem;">HDX HAPI</span>
+                <span class="tag" style="color:#d4380d;border-color:#d4380d;font-size:.56rem;">FTS API</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════
+     SLIDE 3 — Gap Scoring
+════════════════════════════════════════════════ -->
+<div class="slide" id="s3">
+  <div class="slide-inner">
+    <div class="sb">
+      <div class="sb-brand-sub">UNOCHA Hackathon 2026</div>
+      <div class="sb-brand">GEO-<em>INSIGHT</em></div>
+      <div class="sb-nav">
+        <div class="sb-item"><span class="dot"></span>Problem</div>
+        <div class="sb-item"><span class="dot"></span>Architecture</div>
+        <div class="sb-item active"><span class="dot"></span>Gap Scoring</div>
+        <div class="sb-item"><span class="dot"></span>Data Sources</div>
+        <div class="sb-item"><span class="dot"></span>Demo</div>
+        <div class="sb-item"><span class="dot"></span>Limitations</div>
+        <div class="sb-item"><span class="dot"></span>Workflow Fit</div>
+      </div>
+      <div class="sb-footer">Solo Build · 4 Days<br>May 18–21, 2026</div>
+    </div>
+
+    <div class="main">
+      <div class="slide-num">03 / 07</div>
+      <div class="slide-title">Defensible<br><em>Gap Score</em></div>
+      <div class="slide-sub">Every component has an explicit humanitarian rationale</div>
+      <div class="hdiv"></div>
+
+      <div class="body" style="display:flex;gap:1.4rem;">
+
+        <!-- formula -->
+        <div style="flex:1.1;display:flex;flex-direction:column;gap:.9rem;">
+          <div class="formula-box">
+            <div class="comment"># 1. Funding gap (primary signal)</div>
+            <div><span class="hl">funding_gap</span> = 1 − (received / requested)</div>
+            <div class="comment"># 2. Need scale: log-normalize vs global max PIN</div>
+            <div><span class="hl">need_scale</span>  = log1p(PIN) / log1p(max_PIN)</div>
+            <div class="comment"># 3. INFORM severity multiplier (0–10 → 0–1)</div>
+            <div><span class="hl">sev_mult</span>   = INFORM_score / 10.0</div>
+            <div class="comment"># 4. Composite base score</div>
+            <div><span class="green">base</span>       = gap × (0.435 + 0.348×scale + 0.217×sev)</div>
+            <div class="comment"># 5. Structural neglect multiplier</div>
+            <div><span class="green">gap_score</span>  = base × (1 + yrs_underfunded × 0.15)</div>
+          </div>
+
+          <div class="card" style="padding:.8rem 1rem;">
+            <div class="card-label">Bonus: Donor Concentration</div>
+            <div style="font-size:.72rem;color:var(--border);line-height:1.6;">
+              Herfindahl-Hirschman Index (HHI) computed from FTS Flows API for 72 countries. A crisis with HHI &gt; 0.25 or top-donor share &gt; 40% receives a <strong style="color:var(--red);">concentration risk flag</strong> — single-donor dependency = hidden fragility not visible in coverage ratio alone.
+            </div>
+            <div style="margin-top:.5rem;display:flex;gap:.5rem;">
+              <div style="font-size:.68rem;background:var(--light);padding:.3rem .6rem;border-left:2px solid var(--red);">Haiti HHI = 0.307 ⚠</div>
+              <div style="font-size:.68rem;background:var(--light);padding:.3rem .6rem;border-left:2px solid var(--red);">Venezuela top-1 = 45.7%</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- rationale table -->
+        <div style="flex:1;display:flex;flex-direction:column;gap:.9rem;">
+          <div style="font-size:.65rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);">Why each component</div>
+          <table class="tbl">
+            <tr><th>Component</th><th>Why it's here</th></tr>
+            <tr>
+              <td class="red">Funding gap</td>
+              <td>Directly answers the core question — what fraction of need is unresourced</td>
+            </tr>
+            <tr>
+              <td class="red">Need scale</td>
+              <td>Prevents a tiny crisis at 0% coverage outranking a 50M-person crisis at 10%</td>
+            </tr>
+            <tr>
+              <td class="red">INFORM severity</td>
+              <td>Independent validation — not self-reported; avoids gaming of HNO figures</td>
+            </tr>
+            <tr>
+              <td class="red">Neglect factor</td>
+              <td>Separates structural chronic neglect from acute one-time emergencies</td>
+            </tr>
+            <tr>
+              <td class="red">Donor HHI</td>
+              <td>Single-donor reliance = invisible systemic risk; bonus task requirement</td>
+            </tr>
+          </table>
+
+          <div class="card" style="padding:.8rem 1rem;">
+            <div class="card-label">Uncertainty Quantification</div>
+            <div style="font-size:.72rem;color:var(--border);line-height:1.6;">
+              Monte Carlo simulation (1,000 runs) with PIN ±30% and funding ±20% triangular distributions → <strong>P10 / P50 / P90</strong> confidence bands shown per country. Pareto-efficient crises flagged as <strong style="color:var(--red);">★ frontier</strong>.
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════
+     SLIDE 4 — Data Sources
+════════════════════════════════════════════════ -->
+<div class="slide" id="s4">
+  <div class="slide-inner">
+    <div class="sb">
+      <div class="sb-brand-sub">UNOCHA Hackathon 2026</div>
+      <div class="sb-brand">GEO-<em>INSIGHT</em></div>
+      <div class="sb-nav">
+        <div class="sb-item"><span class="dot"></span>Problem</div>
+        <div class="sb-item"><span class="dot"></span>Architecture</div>
+        <div class="sb-item"><span class="dot"></span>Gap Scoring</div>
+        <div class="sb-item active"><span class="dot"></span>Data Sources</div>
+        <div class="sb-item"><span class="dot"></span>Demo</div>
+        <div class="sb-item"><span class="dot"></span>Limitations</div>
+        <div class="sb-item"><span class="dot"></span>Workflow Fit</div>
+      </div>
+      <div class="sb-footer">Solo Build · 4 Days<br>May 18–21, 2026</div>
+    </div>
+
+    <div class="main">
+      <div class="slide-num">04 / 07</div>
+      <div class="slide-title">Data Sources &<br><em>Messy Data</em> Handling</div>
+      <div class="slide-sub">What we used, what we worked around, and how we stayed honest</div>
+      <div class="hdiv"></div>
+
+      <div class="body" style="display:flex;gap:1.4rem;">
+
+        <!-- sources table -->
+        <div style="flex:1.3;">
+          <table class="tbl">
+            <tr>
+              <th>Source</th><th>What it provides</th><th>Challenge handled</th><th>Status</th>
+            </tr>
+            <tr>
+              <td class="red" style="font-weight:700;">HDX HNO</td>
+              <td>People in need, sector breakdown, severity</td>
+              <td>Only 24 countries → HNO tier</td>
+              <td><span class="badge badge-green">Fresh</span></td>
+            </tr>
+            <tr>
+              <td class="red" style="font-weight:700;">FTS API</td>
+              <td>Funding requested / received / pledged</td>
+              <td>Proxy for 53 more countries, no PIN</td>
+              <td><span class="badge badge-green">2025–26</span></td>
+            </tr>
+            <tr>
+              <td class="red" style="font-weight:700;">INFORM Severity</td>
+              <td>Independent crisis severity (0–10)</td>
+              <td>Default 5.0 when missing</td>
+              <td><span class="badge badge-green">2025</span></td>
+            </tr>
+            <tr>
+              <td class="red" style="font-weight:700;">CBPF Pooled Funds</td>
+              <td>Pooled fund allocations by country</td>
+              <td>Only 2018 vintage available</td>
+              <td><span class="badge badge-red">Stale ⚠</span></td>
+            </tr>
+            <tr>
+              <td class="red" style="font-weight:700;">FTS Flows API</td>
+              <td>Donor-level flows → HHI, top donor share</td>
+              <td>72 / 77 countries covered</td>
+              <td><span class="badge badge-amber">Partial</span></td>
+            </tr>
+          </table>
+        </div>
+
+        <!-- right col -->
+        <div style="flex:.9;display:flex;flex-direction:column;gap:.85rem;">
+          <div class="card">
+            <div class="card-label">Missing Data Protocol</div>
+            <div style="display:flex;flex-direction:column;gap:.4rem;margin-top:.3rem;">
+              <div style="font-size:.71rem;color:var(--border);padding:.28rem .5rem;border-left:2px solid var(--red);background:var(--light);">No HRP → coverage = 0%, gap score × 0.5 penalty (less certain)</div>
+              <div style="font-size:.71rem;color:var(--border);padding:.28rem .5rem;border-left:2px solid var(--muted);background:var(--light);">Missing PIN → INFORM severity used as proxy; FTS proxy badge shown</div>
+              <div style="font-size:.71rem;color:var(--border);padding:.28rem .5rem;border-left:2px solid var(--muted);background:var(--light);">Stale data → staleness badge (🕐) in UI; days since update shown</div>
+              <div style="font-size:.71rem;color:var(--border);padding:.28rem .5rem;border-left:2px solid var(--muted);background:var(--light);">Requested vs pledged vs received → always use <strong>received</strong>; all three shown in detail</div>
+            </div>
+          </div>
+
+          <div class="card" style="background:var(--dark);border-color:var(--dark);">
+            <div class="card-label" style="color:#4a3828;">Declared External Models/APIs</div>
+            <div style="display:flex;flex-direction:column;gap:.3rem;margin-top:.3rem;">
+              <div style="font-size:.68rem;color:var(--cream);">Claude claude-sonnet-4-6 (Anthropic)</div>
+              <div style="font-size:.68rem;color:#4a3828;">Query decomposition + briefing notes</div>
+              <div style="height:1px;background:#2a1e14;margin:.25rem 0;"></div>
+              <div style="font-size:.68rem;color:var(--cream);">INFORM Global Crisis Severity Index</div>
+              <div style="font-size:.68rem;color:#4a3828;">Independent severity validation</div>
+              <div style="height:1px;background:#2a1e14;margin:.25rem 0;"></div>
+              <div style="font-size:.68rem;color:var(--cream);">HDX HAPI REST API + FTS api.hpc.tools</div>
+              <div style="font-size:.68rem;color:#4a3828;">Primary data access layer</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════
+     SLIDE 5 — Demo
+════════════════════════════════════════════════ -->
+<div class="slide" id="s5">
+  <div class="slide-inner">
+    <div class="sb">
+      <div class="sb-brand-sub">UNOCHA Hackathon 2026</div>
+      <div class="sb-brand">GEO-<em>INSIGHT</em></div>
+      <div class="sb-nav">
+        <div class="sb-item"><span class="dot"></span>Problem</div>
+        <div class="sb-item"><span class="dot"></span>Architecture</div>
+        <div class="sb-item"><span class="dot"></span>Gap Scoring</div>
+        <div class="sb-item"><span class="dot"></span>Data Sources</div>
+        <div class="sb-item active"><span class="dot"></span>Demo</div>
+        <div class="sb-item"><span class="dot"></span>Limitations</div>
+        <div class="sb-item"><span class="dot"></span>Workflow Fit</div>
+      </div>
+      <div class="sb-footer">Solo Build · 4 Days<br>May 18–21, 2026</div>
+    </div>
+
+    <div class="main">
+      <div class="slide-num">05 / 07</div>
+      <div class="slide-title">System in<br><em>Action</em></div>
+      <div class="slide-sub">3 query examples · 6-tab dashboard · conversational agent</div>
+      <div class="hdiv"></div>
+
+      <div class="body" style="display:grid;grid-template-columns:1.15fr 1.2fr 0.95fr;gap:.85rem;height:100%;">
+
+        <!-- scene 1: ranked table -->
+        <div style="display:flex;flex-direction:column;gap:.5rem;">
+          <div style="display:flex;align-items:center;gap:.5rem;">
+            <span style="font-size:.6rem;font-weight:900;background:var(--red);color:#fff;padding:.15rem .4rem;">01</span>
+            <span style="font-size:.65rem;font-weight:700;color:var(--border);text-transform:uppercase;letter-spacing:.06em;">Global Ranked Table</span>
+          </div>
+          <!-- mini dashboard frame -->
+          <div style="flex:1;border:2px solid var(--border);overflow:hidden;display:flex;flex-direction:column;">
+            <!-- tab bar -->
+            <div style="background:var(--dark);display:flex;gap:0;padding:0 .5rem;">
+              <div style="font-size:.5rem;font-weight:700;color:var(--red);padding:.35rem .5rem;border-bottom:2px solid var(--red);letter-spacing:.06em;text-transform:uppercase;">Ranked Table</div>
+              <div style="font-size:.5rem;font-weight:600;color:#4a3828;padding:.35rem .5rem;letter-spacing:.06em;text-transform:uppercase;">World Map</div>
+              <div style="font-size:.5rem;font-weight:600;color:#4a3828;padding:.35rem .5rem;letter-spacing:.06em;text-transform:uppercase;">Ask Agent</div>
+            </div>
+            <!-- table -->
+            <div style="flex:1;overflow:hidden;padding:.3rem .4rem;">
+              <div style="font-size:.5rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.3rem;">Ranked Crises by Gap Score</div>
+              <table style="width:100%;border-collapse:collapse;font-size:.58rem;">
+                <thead>
+                  <tr style="background:var(--dark);">
+                    <th style="color:var(--cream);padding:.25rem .3rem;text-align:left;font-size:.5rem;font-weight:700;letter-spacing:.06em;">#</th>
+                    <th style="color:var(--cream);padding:.25rem .3rem;text-align:left;font-size:.5rem;font-weight:700;letter-spacing:.06em;">Country</th>
+                    <th style="color:var(--cream);padding:.25rem .3rem;text-align:left;font-size:.5rem;font-weight:700;letter-spacing:.06em;">Gap Score [CI]</th>
+                    <th style="color:var(--cream);padding:.25rem .3rem;text-align:left;font-size:.5rem;font-weight:700;letter-spacing:.06em;">Coverage</th>
+                    <th style="color:var(--cream);padding:.25rem .3rem;text-align:left;font-size:.5rem;font-weight:700;letter-spacing:.06em;">PIN</th>
+                    <th style="color:var(--cream);padding:.25rem .3rem;text-align:left;font-size:.5rem;font-weight:700;letter-spacing:.06em;">Neglect</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr style="background:#fff9f3;">
+                    <td style="padding:.22rem .3rem;color:var(--red);font-weight:900;">1</td>
+                    <td style="padding:.22rem .3rem;font-weight:700;">Burkina Faso</td>
+                    <td style="padding:.22rem .3rem;color:var(--red);font-weight:700;font-family:monospace;">1.165</td>
+                    <td style="padding:.22rem .3rem;">13.8%</td>
+                    <td style="padding:.22rem .3rem;">4.40M</td>
+                    <td style="padding:.22rem .3rem;"><span style="font-size:.48rem;background:#fde8e3;color:#8b2000;padding:.1rem .3rem;font-weight:700;">structural</span></td>
+                  </tr>
+                  <tr>
+                    <td style="padding:.22rem .3rem;color:var(--red);font-weight:900;">2</td>
+                    <td style="padding:.22rem .3rem;font-weight:700;">Mali</td>
+                    <td style="padding:.22rem .3rem;color:var(--red);font-weight:700;font-family:monospace;">1.136</td>
+                    <td style="padding:.22rem .3rem;">16.0%</td>
+                    <td style="padding:.22rem .3rem;">5.10M</td>
+                    <td style="padding:.22rem .3rem;"><span style="font-size:.48rem;background:#fde8e3;color:#8b2000;padding:.1rem .3rem;font-weight:700;">structural</span></td>
+                  </tr>
+                  <tr style="background:#fff9f3;">
+                    <td style="padding:.22rem .3rem;color:var(--red);font-weight:900;">3</td>
+                    <td style="padding:.22rem .3rem;font-weight:700;">Venezuela</td>
+                    <td style="padding:.22rem .3rem;color:var(--red);font-weight:700;font-family:monospace;">1.132</td>
+                    <td style="padding:.22rem .3rem;">15.4%</td>
+                    <td style="padding:.22rem .3rem;">7.90M</td>
+                    <td style="padding:.22rem .3rem;"><span style="font-size:.48rem;background:#fde8e3;color:#8b2000;padding:.1rem .3rem;font-weight:700;">structural</span></td>
+                  </tr>
+                  <tr>
+                    <td style="padding:.22rem .3rem;font-weight:700;">4</td>
+                    <td style="padding:.22rem .3rem;font-weight:700;">Yemen</td>
+                    <td style="padding:.22rem .3rem;font-weight:700;font-family:monospace;">1.108</td>
+                    <td style="padding:.22rem .3rem;">13.1%</td>
+                    <td style="padding:.22rem .3rem;">23.10M</td>
+                    <td style="padding:.22rem .3rem;"><span style="font-size:.48rem;background:#fdf0d5;color:#8a5a00;padding:.1rem .3rem;font-weight:700;">ongoing ★</span></td>
+                  </tr>
+                  <tr style="background:#fff9f3;">
+                    <td style="padding:.22rem .3rem;font-weight:700;">5</td>
+                    <td style="padding:.22rem .3rem;font-weight:700;">Afghanistan</td>
+                    <td style="padding:.22rem .3rem;font-weight:700;font-family:monospace;">1.081</td>
+                    <td style="padding:.22rem .3rem;">14.9%</td>
+                    <td style="padding:.22rem .3rem;">21.89M</td>
+                    <td style="padding:.22rem .3rem;"><span style="font-size:.48rem;background:#fdf0d5;color:#8a5a00;padding:.1rem .3rem;font-weight:700;">ongoing</span></td>
+                  </tr>
+                  <tr>
+                    <td style="padding:.22rem .3rem;font-weight:700;">6</td>
+                    <td style="padding:.22rem .3rem;font-weight:700;">Haiti</td>
+                    <td style="padding:.22rem .3rem;font-weight:700;font-family:monospace;">1.065</td>
+                    <td style="padding:.22rem .3rem;">22.5%</td>
+                    <td style="padding:.22rem .3rem;">6.41M</td>
+                    <td style="padding:.22rem .3rem;"><span style="font-size:.48rem;background:#fde8e3;color:#8b2000;padding:.1rem .3rem;font-weight:700;">structural</span></td>
+                  </tr>
+                </tbody>
+              </table>
+              <div style="margin-top:.4rem;font-size:.5rem;color:var(--muted);">77 countries · HNO ✓ = full gap score · Monte Carlo P10/P50/P90 shown</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- scene 2: agent response -->
+        <div style="display:flex;flex-direction:column;gap:.5rem;">
+          <div style="display:flex;align-items:center;gap:.5rem;">
+            <span style="font-size:.6rem;font-weight:900;background:var(--red);color:#fff;padding:.15rem .4rem;">02</span>
+            <span style="font-size:.65rem;font-weight:700;color:var(--border);text-transform:uppercase;letter-spacing:.06em;">Agent: CBPF Query</span>
+          </div>
+          <div style="flex:1;border:2px solid var(--border);overflow:hidden;display:flex;flex-direction:column;background:var(--cream);">
+            <!-- query bubble -->
+            <div style="background:#f0ebe3;padding:.4rem .6rem;border-bottom:1px solid #ddd5ca;display:flex;gap:.4rem;align-items:flex-start;">
+              <div style="width:14px;height:14px;border-radius:50%;background:var(--red);flex-shrink:0;margin-top:.05rem;"></div>
+              <div style="font-size:.55rem;color:var(--border);line-height:1.5;">Which structurally neglected crises in Sub-Saharan Africa should a CBPF fund manager prioritize this year?</div>
+            </div>
+            <!-- response -->
+            <div style="flex:1;overflow:hidden;padding:.4rem .6rem;display:flex;flex-direction:column;gap:.4rem;">
+              <div style="font-size:.72rem;font-weight:900;color:var(--border);font-family:'Playfair Display',serif;line-height:1.2;">CBPF Priority Assessment:<br>Structurally Neglected Crises<br>— Sub-Saharan Africa (2025)</div>
+              <div style="font-size:.52rem;color:#8a5a00;background:#fdf0d5;padding:.2rem .4rem;">⚠ Data Confidence: MEDIUM — gap scores are directional signals, not precise measurements</div>
+              <!-- mini result table -->
+              <table style="width:100%;border-collapse:collapse;font-size:.56rem;">
+                <thead>
+                  <tr style="background:var(--dark);">
+                    <th style="color:var(--cream);padding:.2rem .3rem;text-align:left;font-size:.48rem;">#</th>
+                    <th style="color:var(--cream);padding:.2rem .3rem;text-align:left;font-size:.48rem;">Country</th>
+                    <th style="color:var(--cream);padding:.2rem .3rem;text-align:left;font-size:.48rem;">Gap Score</th>
+                    <th style="color:var(--cream);padding:.2rem .3rem;text-align:left;font-size:.48rem;">Coverage</th>
+                    <th style="color:var(--cream);padding:.2rem .3rem;text-align:left;font-size:.48rem;">PIN</th>
+                    <th style="color:var(--cream);padding:.2rem .3rem;text-align:left;font-size:.48rem;">INFORM</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr style="background:#fff9f3;">
+                    <td style="padding:.18rem .3rem;color:var(--red);font-weight:900;">1</td>
+                    <td style="padding:.18rem .3rem;font-weight:700;">🇲🇱 Mali</td>
+                    <td style="padding:.18rem .3rem;color:var(--red);font-weight:700;">1.025</td>
+                    <td style="padding:.18rem .3rem;">24.6%</td>
+                    <td style="padding:.18rem .3rem;">6.4M</td>
+                    <td style="padding:.18rem .3rem;">8.3/10</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:.18rem .3rem;font-weight:700;">2</td>
+                    <td style="padding:.18rem .3rem;font-weight:700;">🇲🇿 Mozambique</td>
+                    <td style="padding:.18rem .3rem;font-weight:700;">0.986</td>
+                    <td style="padding:.18rem .3rem;">23.3%</td>
+                    <td style="padding:.18rem .3rem;">1.3M</td>
+                    <td style="padding:.18rem .3rem;">7.5/10</td>
+                  </tr>
+                  <tr style="background:#fff9f3;">
+                    <td style="padding:.18rem .3rem;font-weight:700;">3</td>
+                    <td style="padding:.18rem .3rem;font-weight:700;">🇨🇲 Cameroon</td>
+                    <td style="padding:.18rem .3rem;font-weight:700;">0.951</td>
+                    <td style="padding:.18rem .3rem;">23.0%</td>
+                    <td style="padding:.18rem .3rem;">3.3M</td>
+                    <td style="padding:.18rem .3rem;">5.0/10</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:.18rem .3rem;font-weight:700;">4</td>
+                    <td style="padding:.18rem .3rem;font-weight:700;">🇧🇫 Burkina Faso</td>
+                    <td style="padding:.18rem .3rem;font-weight:700;">0.894</td>
+                    <td style="padding:.18rem .3rem;">34.2%</td>
+                    <td style="padding:.18rem .3rem;">5.9M</td>
+                    <td style="padding:.18rem .3rem;">8.4/10</td>
+                  </tr>
+                </tbody>
+              </table>
+              <div style="font-size:.52rem;color:var(--mid);line-height:1.5;border-left:2px solid var(--red);padding-left:.4rem;">
+                <strong>Mali #1:</strong> 75-cent shortfall on every dollar requested. Access denial in Ménaka/Kidal may affect ~30% of PIN — fund managers should verify accessible zones before treating gap as fully actionable.
+              </div>
+              <div style="font-size:.48rem;color:var(--muted);margin-top:auto;">All four classified as structural neglect (3 consecutive underfunded years) · All have active HRPs</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- scene 3: world map -->
+        <div style="display:flex;flex-direction:column;gap:.5rem;">
+          <div style="display:flex;align-items:center;gap:.5rem;">
+            <span style="font-size:.6rem;font-weight:900;background:var(--red);color:#fff;padding:.15rem .4rem;">03</span>
+            <span style="font-size:.65rem;font-weight:700;color:var(--border);text-transform:uppercase;letter-spacing:.06em;">Choropleth Map</span>
+          </div>
+          <div style="flex:1;border:2px solid var(--border);overflow:hidden;display:flex;flex-direction:column;background:var(--cream);">
+            <div style="padding:.3rem .5rem;border-bottom:1px solid var(--light);">
+              <div style="font-size:.52rem;font-weight:700;color:var(--border);">Gap Score World Map · 77 countries · higher = more overlooked</div>
+            </div>
+            <div style="flex:1;overflow:hidden;">
+              <img src="img/worldmap_crop.png" style="width:100%;height:100%;object-fit:cover;object-position:center top;" alt="World Map"/>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════
+     SLIDE 6 — Limitations & RAI
+════════════════════════════════════════════════ -->
+<div class="slide" id="s6">
+  <div class="slide-inner">
+    <div class="sb">
+      <div class="sb-brand-sub">UNOCHA Hackathon 2026</div>
+      <div class="sb-brand">GEO-<em>INSIGHT</em></div>
+      <div class="sb-nav">
+        <div class="sb-item"><span class="dot"></span>Problem</div>
+        <div class="sb-item"><span class="dot"></span>Architecture</div>
+        <div class="sb-item"><span class="dot"></span>Gap Scoring</div>
+        <div class="sb-item"><span class="dot"></span>Data Sources</div>
+        <div class="sb-item"><span class="dot"></span>Demo</div>
+        <div class="sb-item active"><span class="dot"></span>Limitations</div>
+        <div class="sb-item"><span class="dot"></span>Workflow Fit</div>
+      </div>
+      <div class="sb-footer">Solo Build · 4 Days<br>May 18–21, 2026</div>
+    </div>
+
+    <div class="main">
+      <div class="slide-num">06 / 07</div>
+      <div class="slide-title">What This System<br><em>Does Not Know</em></div>
+      <div class="slide-sub">Limitations · Responsible AI Scorecard · 7 dimensions</div>
+      <div class="hdiv"></div>
+
+      <div class="body" style="display:flex;gap:1.4rem;">
+
+        <!-- left: limitations -->
+        <div style="flex:1;display:flex;flex-direction:column;gap:.7rem;">
+          <div style="font-size:.62rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);">Known Limitations</div>
+          <div style="display:flex;flex-direction:column;gap:.45rem;">
+            <div style="font-size:.72rem;color:var(--border);padding:.35rem .6rem;background:var(--light);border-left:3px solid var(--red);line-height:1.5;">
+              <strong>FTS proxy PIN = 0</strong> — 53 countries scored on funding gap + severity only; gap score underestimates true need
+            </div>
+            <div style="font-size:.72rem;color:var(--border);padding:.35rem .6rem;background:var(--light);border-left:3px solid var(--red);line-height:1.5;">
+              <strong>CBPF data is 2018 vintage</strong> — pooled fund allocations flagged as stale; FTS used as primary funding source
+            </div>
+            <div style="font-size:.72rem;color:var(--border);padding:.35rem .6rem;background:var(--light);border-left:3px solid var(--red);line-height:1.5;">
+              <strong>Coverage ≠ access</strong> — 0% funding may mean access is blocked, not just neglected; system cannot distinguish
+            </div>
+            <div style="font-size:.72rem;color:var(--border);padding:.35rem .6rem;background:var(--light);border-left:3px solid var(--red);line-height:1.5;">
+              <strong>No last-mile tracking</strong> — system cannot verify if aid reached beneficiaries; funding received ≠ impact
+            </div>
+            <div style="font-size:.72rem;color:var(--border);padding:.35rem .6rem;background:var(--light);border-left:3px solid var(--muted);line-height:1.5;">
+              Sector-level analysis available for HNO-tier countries only (24 of 77)
+            </div>
+          </div>
+        </div>
+
+        <!-- right: RAI scorecard -->
+        <div style="flex:1;display:flex;flex-direction:column;gap:.6rem;">
+          <div style="font-size:.62rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);">Responsible AI Scorecard</div>
+          <table class="tbl">
+            <tr><th>Dimension</th><th>Implementation</th><th></th></tr>
+            <tr>
+              <td style="font-weight:600;">Transparency</td>
+              <td style="font-size:.66rem;">Formula fully documented, open weights, all sources declared</td>
+              <td><span class="badge badge-green">✓</span></td>
+            </tr>
+            <tr>
+              <td style="font-weight:600;">Uncertainty</td>
+              <td style="font-size:.66rem;">Monte Carlo P10/P50/P90 bands on every score</td>
+              <td><span class="badge badge-green">✓</span></td>
+            </tr>
+            <tr>
+              <td style="font-weight:600;">Fairness</td>
+              <td style="font-size:.66rem;">Two-tier badge prevents false equivalence; proxy countries flagged</td>
+              <td><span class="badge badge-green">✓</span></td>
+            </tr>
+            <tr>
+              <td style="font-weight:600;">Neutral Framing</td>
+              <td style="font-size:.66rem;">"May warrant" language; no automated decisions; human in loop</td>
+              <td><span class="badge badge-green">✓</span></td>
+            </tr>
+            <tr>
+              <td style="font-weight:600;">Human Oversight</td>
+              <td style="font-size:.66rem;">All outputs are recommendations; red_team_challenge tool built in</td>
+              <td><span class="badge badge-green">✓</span></td>
+            </tr>
+            <tr>
+              <td style="font-weight:600;">Data Governance</td>
+              <td style="font-size:.66rem;">All sources public; data_sources.md declared; CBPF staleness flagged</td>
+              <td><span class="badge badge-amber">~</span></td>
+            </tr>
+            <tr>
+              <td style="font-weight:600;">Model Governance</td>
+              <td style="font-size:.66rem;">MLflow traces every query; parameters logged; reproducible</td>
+              <td><span class="badge badge-green">✓</span></td>
+            </tr>
+          </table>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════
+     SLIDE 7 — Workflow Fit
+════════════════════════════════════════════════ -->
+<div class="slide" id="s7">
+  <div class="slide-inner">
+    <div class="sb">
+      <div class="sb-brand-sub">UNOCHA Hackathon 2026</div>
+      <div class="sb-brand">GEO-<em>INSIGHT</em></div>
+      <div class="sb-nav">
+        <div class="sb-item"><span class="dot"></span>Problem</div>
+        <div class="sb-item"><span class="dot"></span>Architecture</div>
+        <div class="sb-item"><span class="dot"></span>Gap Scoring</div>
+        <div class="sb-item"><span class="dot"></span>Data Sources</div>
+        <div class="sb-item"><span class="dot"></span>Demo</div>
+        <div class="sb-item"><span class="dot"></span>Limitations</div>
+        <div class="sb-item active"><span class="dot"></span>Workflow Fit</div>
+      </div>
+      <div class="sb-footer">Solo Build · 4 Days<br>May 18–21, 2026</div>
+    </div>
+
+    <div class="main">
+      <div class="slide-num">07 / 07</div>
+      <div class="slide-title">How This Fits<br><em>Real Workflows</em></div>
+      <div class="slide-sub">Who uses it · what they do next · what could go wrong</div>
+      <div class="hdiv"></div>
+
+      <div class="body" style="display:flex;gap:1.4rem;">
+
+        <!-- left: users + workflow -->
+        <div style="flex:1.1;display:flex;flex-direction:column;gap:.85rem;">
+
+          <div class="card">
+            <div class="card-label">User Roles</div>
+            <div style="display:flex;flex-direction:column;gap:.45rem;margin-top:.3rem;">
+              <div style="display:flex;gap:.7rem;align-items:flex-start;">
+                <span class="tag tag-red" style="flex-shrink:0;">HC</span>
+                <div style="font-size:.71rem;color:var(--border);line-height:1.5;">Humanitarian Coordinator — morning briefing query → triage agenda → field cross-check</div>
+              </div>
+              <div style="display:flex;gap:.7rem;align-items:flex-start;">
+                <span class="tag tag-dark" style="flex-shrink:0;">DA</span>
+                <div style="font-size:.71rem;color:var(--border);line-height:1.5;">Donor Advisor — "where should next $10M go?" → defensible shortlist → donor contact memo</div>
+              </div>
+              <div style="display:flex;gap:.7rem;align-items:flex-start;">
+                <span class="tag tag-muted" style="flex-shrink:0;">OA</span>
+                <div style="font-size:.71rem;color:var(--border);line-height:1.5;">OCHA Analyst — sector gap drilldown → CAP process flag → advocacy brief</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-label">After Seeing Results, Next Steps</div>
+            <div style="display:flex;flex-direction:column;gap:.35rem;margin-top:.3rem;">
+              <div style="display:flex;gap:.5rem;align-items:center;">
+                <span style="font-size:.65rem;font-weight:900;color:var(--red);">1</span>
+                <span style="font-size:.71rem;color:var(--border);">Cross-check with country team / field reports — system is decision support, not decision-maker</span>
+              </div>
+              <div style="display:flex;gap:.5rem;align-items:center;">
+                <span style="font-size:.65rem;font-weight:900;color:var(--red);">2</span>
+                <span style="font-size:.71rem;color:var(--border);">Flag structural neglect countries for Consolidated Appeals Process (CAP)</span>
+              </div>
+              <div style="display:flex;gap:.5rem;align-items:center;">
+                <span style="font-size:.65rem;font-weight:900;color:var(--red);">3</span>
+                <span style="font-size:.71font-weight:normal;color:var(--border);">Share agent-generated briefing note with donor contacts or media</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- right: failure modes + closing -->
+        <div style="flex:1;display:flex;flex-direction:column;gap:.85rem;">
+          <div class="card">
+            <div class="card-label">What Could Go Wrong</div>
+            <div style="display:flex;flex-direction:column;gap:.4rem;margin-top:.3rem;">
+              <div style="font-size:.71rem;color:var(--border);padding:.3rem .5rem;background:#fde8e3;border-left:2px solid var(--red);line-height:1.5;">
+                <strong>Overreliance:</strong> gap score ≠ absorptive capacity — 0% coverage may mean access is blocked, not neglected
+              </div>
+              <div style="font-size:.71rem;color:var(--border);padding:.3rem .5rem;background:#fdf0d5;border-left:2px solid #c87a00;line-height:1.5;">
+                <strong>Gaming:</strong> if rankings become public, actors could inflate HNO PIN estimates to attract funding
+              </div>
+              <div style="font-size:.71rem;color:var(--border);padding:.3rem .5rem;background:#fdf0d5;border-left:2px solid #c87a00;line-height:1.5;">
+                <strong>Staleness:</strong> data lags mean a newly erupting crisis may score low until next HNO cycle
+              </div>
+            </div>
+          </div>
+
+          <div style="border:3px solid var(--border);background:var(--dark);padding:1.2rem 1.4rem;flex:1;display:flex;flex-direction:column;justify-content:space-between;">
+            <div style="font-family:'Playfair Display',serif;font-style:italic;font-size:1rem;color:var(--cream);line-height:1.6;">
+              "Good humanitarian data work does not just optimize numbers. It respects context."
+            </div>
+            <div style="margin-top:.8rem;">
+              <div style="font-size:.6rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#4a3828;margin-bottom:.6rem;">Deliverables submitted</div>
+              <div style="display:flex;flex-wrap:wrap;gap:.4rem;">
+                <span class="tag" style="color:var(--cream);border-color:#3a2a1e;font-size:.56rem;">✓ Working prototype</span>
+                <span class="tag" style="color:var(--cream);border-color:#3a2a1e;font-size:.56rem;">✓ Technical write-up</span>
+                <span class="tag" style="color:var(--cream);border-color:#3a2a1e;font-size:.56rem;">✓ 15-min demo video</span>
+                <span class="tag" style="color:var(--cream);border-color:#3a2a1e;font-size:.56rem;">✓ Gap scoring logic</span>
+                <span class="tag" style="color:var(--cream);border-color:#3a2a1e;font-size:.56rem;">✓ Failure cases</span>
+                <span class="tag" style="color:#d4380d;border-color:#d4380d;font-size:.56rem;">✓ Bonus: structural neglect</span>
+                <span class="tag" style="color:#d4380d;border-color:#d4380d;font-size:.56rem;">✓ Bonus: donor concentration</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /deck -->
+
+<!-- Navigation -->
+<div id="nav">
+  <button onclick="go(-1)">← Prev</button>
+  <div class="sep">|</div>
+  <div id="slide-counter">1 / 7</div>
+  <div class="sep">|</div>
+  <button onclick="go(1)">Next →</button>
+</div>
+
+<script>
+let cur = 0;
+const slides = document.querySelectorAll('.slide');
+
+function go(dir) {
+  slides[cur].classList.remove('active');
+  cur = Math.max(0, Math.min(slides.length - 1, cur + dir));
+  slides[cur].classList.add('active');
+  document.getElementById('slide-counter').textContent = (cur === 0 ? 'Cover' : cur) + ' / 7';
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') go(1);
+  if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   go(-1);
+});
+</script>
+</body>
+</html>

@@ -266,7 +266,118 @@ consec.columns = ["country_iso3", "consecutive_years_underfunded"]
 silver = silver.merge(consec, on="country_iso3", how="left")
 silver["consecutive_years_underfunded"] = silver["consecutive_years_underfunded"].fillna(0).astype(int)
 
-print(f"  Silver rows: {len(silver)} | Countries: {silver['country_iso3'].nunique()} | Years: {sorted(silver['year'].unique())}")
+silver["data_tier"] = "hno"   # mark HNO countries
+print(f"  HNO-tier rows: {len(silver)} | Countries: {silver['country_iso3'].nunique()}")
+
+# ── 6b: Add FTS-only proxy countries (no HNO PIN available) ─────────────────
+print("\n🔗 Step 6b: Adding FTS proxy countries (no HNO PIN) …")
+
+hno_isos = set(silver["country_iso3"].unique())
+fts_proxy_raw = fts_agg[~fts_agg["country_iso3"].isin(hno_isos)].copy()
+
+# Keep most recent year per country for proxy
+fts_proxy_raw = fts_proxy_raw.sort_values("year", ascending=False)
+fts_proxy_recent = fts_proxy_raw.drop_duplicates(subset=["country_iso3"], keep="first")
+
+fts_proxy_recent["people_in_need"]   = np.nan
+fts_proxy_recent["people_targeted"]  = np.nan
+fts_proxy_recent["has_hrp"] = fts_proxy_recent.apply(
+    lambda r: (r["country_iso3"], int(r["year"])) in hrp_set, axis=1
+)
+fts_proxy_recent = fts_proxy_recent.merge(inform, on="country_iso3", how="left")
+fts_proxy_recent["inform_severity"]  = fts_proxy_recent["inform_severity"].fillna(5.0)
+fts_proxy_recent["cbpf_allocated"]   = 0.0
+fts_proxy_recent["data_tier"]        = "fts_proxy"
+fts_proxy_recent["consecutive_years_underfunded"] = 1   # conservative default
+fts_proxy_recent["data_staleness_days"] = 365           # conservative
+
+try:
+    import pycountry
+    fts_proxy_recent["country_name"] = fts_proxy_recent["country_iso3"].apply(
+        lambda x: pycountry.countries.get(alpha_3=x).name if pycountry.countries.get(alpha_3=x) else x
+    )
+except ImportError:
+    fts_proxy_recent["country_name"] = fts_proxy_recent["country_iso3"]
+
+silver = pd.concat([silver, fts_proxy_recent], ignore_index=True)
+print(f"  Added {len(fts_proxy_recent)} proxy countries | Total: {silver['country_iso3'].nunique()} countries")
+
+# ── 6c: Donor concentration via FTS flows API ────────────────────────────────
+print("\n🔗 Step 6c: Computing donor concentration via FTS API …")
+
+import urllib.request, json as _json, time as _time
+
+# Build plan_id map from FTS CSV (use most recent year per country)
+fts_raw = pd.read_csv(RAW / "fts_requirements_funding_global.csv", low_memory=False)
+fts_plans = (
+    fts_raw[fts_raw["year"].isin([2025, 2026])]
+    .dropna(subset=["id", "requirements"])
+    .query("requirements > 0")
+    .sort_values("year", ascending=False)
+    .drop_duplicates(subset=["countryCode"], keep="first")
+    [["countryCode", "id", "year"]]
+    .rename(columns={"countryCode": "country_iso3"})
+)
+fts_plans["plan_id"] = fts_plans["id"].astype(int)
+
+def _fetch_donor_concentration(plan_id: int) -> dict:
+    """Fetch all flows for a plan, return donor concentration metrics."""
+    url = f"https://api.hpc.tools/v1/public/fts/flow?planid={plan_id}&limit=500"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        resp = urllib.request.urlopen(req, timeout=12)
+        data = _json.loads(resp.read())
+        flows = data.get("data", {}).get("flows", [])
+        if not flows:
+            return {}
+        # Aggregate by donor organization
+        donor_amounts: dict = {}
+        for f in flows:
+            amt = float(f.get("amountUSD") or 0)
+            if amt <= 0:
+                continue
+            src_orgs = [o for o in f.get("sourceObjects", []) if o.get("type") == "Organization"]
+            donor_name = src_orgs[0]["name"] if src_orgs else "Unknown"
+            donor_amounts[donor_name] = donor_amounts.get(donor_name, 0) + amt
+        if not donor_amounts:
+            return {}
+        total = sum(donor_amounts.values())
+        shares = {k: v / total for k, v in sorted(donor_amounts.items(), key=lambda x: -x[1])}
+        share_vals = list(shares.values())
+        top_donors = list(shares.keys())
+        hhi = sum(s ** 2 for s in share_vals)
+        return {
+            "n_donors":         len(share_vals),
+            "top1_donor":       top_donors[0] if top_donors else None,
+            "top1_donor_share": round(share_vals[0] * 100, 1) if share_vals else None,
+            "top3_donor_share": round(sum(share_vals[:3]) * 100, 1) if len(share_vals) >= 3 else round(sum(share_vals) * 100, 1),
+            "donor_hhi":        round(hhi, 4),
+        }
+    except Exception:
+        return {}
+
+donor_rows = []
+total_plans = len(fts_plans)
+for i, (_, row) in enumerate(fts_plans.iterrows()):
+    metrics = _fetch_donor_concentration(int(row["plan_id"]))
+    metrics["country_iso3"] = row["country_iso3"]
+    donor_rows.append(metrics)
+    if (i + 1) % 10 == 0 or i == 0:
+        print(f"  [{i+1}/{total_plans}] {row['country_iso3']} → {metrics.get('n_donors', 0)} donors, HHI={metrics.get('donor_hhi','?')}")
+    _time.sleep(0.3)   # rate limit
+
+donor_df = pd.DataFrame(donor_rows)
+if not donor_df.empty and "country_iso3" in donor_df.columns:
+    silver = silver.merge(donor_df, on="country_iso3", how="left")
+    print(f"  Donor concentration enriched for {donor_df['n_donors'].notna().sum()} countries")
+else:
+    silver["n_donors"] = np.nan
+    silver["top1_donor"] = None
+    silver["top1_donor_share"] = np.nan
+    silver["top3_donor_share"] = np.nan
+    silver["donor_hhi"] = np.nan
+
+print(f"\n  Silver rows: {len(silver)} | Countries: {silver['country_iso3'].nunique()} | Tiers: hno={len(silver[silver['data_tier']=='hno'])}, proxy={len(silver[silver['data_tier']=='fts_proxy'])}")
 silver.to_parquet(SILVER_OUT, index=False)
 print(f"  Saved → {SILVER_OUT}")
 
@@ -275,12 +386,22 @@ print(f"  Saved → {SILVER_OUT}")
 # ─────────────────────────────────────────────────────────────────────────────
 print("\n🏅 Step 7: Scoring → Gold table …")
 
+# Build score_input — include extra passthrough columns (data_tier, donor metrics)
+_extra_cols = [c for c in [
+    "data_tier", "n_donors", "top1_donor", "top1_donor_share",
+    "top3_donor_share", "donor_hhi", "country_name",
+] if c in silver.columns]
+
 score_input = silver[[
-    "country_iso3", "country_name", "year",
+    "country_iso3", "year",
     "people_in_need", "funding_requested", "funding_received",
     "has_hrp", "cbpf_allocated", "inform_severity",
     "consecutive_years_underfunded", "data_staleness_days",
-]].copy()
+] + _extra_cols].copy()
+
+# Ensure country_name is present
+if "country_name" not in score_input.columns:
+    score_input["country_name"] = score_input["country_iso3"]
 
 gold = score_dataframe(score_input, apply_pareto=True)
 gold["coverage_pct"] = gold["coverage_ratio"] * 100

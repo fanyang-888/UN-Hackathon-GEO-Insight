@@ -17,7 +17,7 @@ An end-to-end Agentic Command Center that identifies humanitarian crises where d
 7. [Agent Design](#agent-design)
 8. [Workflow Integration](#workflow-integration)
 9. [Known Limitations](#known-limitations)
-11. [Changelog](#changelog)
+10. [Changelog](#changelog)
 
 ---
 
@@ -48,7 +48,7 @@ Official Databricks Volume (cmu_hackathon.common.unocha)
   [05 Evaluate]    pipeline/05_evaluate_agent.py  — LLM-as-Judge eval (4 golden cases)
         ↓             Logs to MLflow experiment "geo-insight-eval"
         ↓
-  [05 Streamlit UI]  — Ranked Table · World Map · Sector Gaps · Ask the Agent
+  [05 Streamlit UI]  — Ranked Table · World Map · Sector Gaps · Data Drift · Ask the Agent · RAI Scorecard
 ```
 
 **Tech stack:** Python 3.12 · Pandas · Claude API (claude-sonnet-4-6) · MLflow 3 (Tracing + Eval) · Streamlit · Plotly · scikit-learn (TF-IDF RAG)
@@ -73,7 +73,7 @@ unocha-hackathon/
 │   ├── agent_runner.py           # Import shim for dashboard
 │   └── rag_search.py             # TF-IDF RAG index over Gold table
 ├── app/                      # Streamlit dashboard (4 tabs)
-│   └── 05_dashboard.py
+│   └── 05_dashboard.py           # Streamlit dashboard (6 tabs)
 ├── core/                     # Shared scoring logic (importable anywhere)
 │   └── scoring_logic.py          # Gap score, Monte Carlo CI, EVPI
 ├── data_sources.md
@@ -84,9 +84,9 @@ unocha-hackathon/
     │   ├── bronze_cbpf.parquet
     │   └── bronze_inform.parquet
     ├── silver/
-    │   └── silver_master.parquet   # 66 rows · 24 countries · 3 years
+    │   └── silver_master.parquet   # 119 rows · 77 countries · 2 tiers (hno + fts_proxy)
     └── gold/
-        ├── gold_ranked_crises.parquet  # 66 rows · scored & ranked
+        ├── gold_ranked_crises.parquet  # 119 rows · scored & ranked · donor concentration
         ├── sector_funding_gaps.csv     # 390 rows · 44 countries × 9 clusters
         └── top30_overlooked_crises.csv
 ```
@@ -255,9 +255,17 @@ Key findings:
 - 🇾🇪 YEM Agriculture: 0% funded, 23.1M total PIN
 - 🇸🇩 SDN multiple clusters: <10% funded, 33.7M PIN
 
-### Tab 4 — Ask the Agent
+### Tab 4 — Data Drift
+
+Year-over-year distribution shift analysis (2024 reference vs 2025 current). Kolmogorov-Smirnov test per numeric column; chi-square for categorical. Shows whether prior-year rankings remain valid.
+
+### Tab 5 — Ask the Agent
 
 Conversational interface powered by Claude API (claude-sonnet-4-6). See [Agent Design](#agent-design).
+
+### Tab 6 — 🛡️ RAI Scorecard
+
+Responsible AI Scorecard — 7 dimensions of responsible AI design, each grounded in a specific architectural decision. Includes status (✅ / ⚠️), evidence, and known limitations. See [Responsible AI Scorecard](#responsible-ai-scorecard).
 
 ---
 
@@ -380,7 +388,7 @@ This system fits into **existing OCHA and CBPF analyst workflows** — it suppor
 
 | Issue | Impact | Mitigation |
 |-------|--------|-----------|
-| HNO national PIN: 24 countries | Other countries absent from Gold ranking | Sector Gaps tab uses FTS data (44 countries) |
+| HNO national PIN: 24 countries | Countries without HNO have PIN=0 → gap score from funding gap + severity only | FTS proxy tier (53 countries) included; `data_tier` column distinguishes quality |
 | INFORM max-severity aggregation | Multi-crisis countries (NGA, TCD) may overstate severity | Flagged in briefing counter-arguments |
 | Funding data spans multi-year appeals | `funding_year` may lag `HNO year` | Silver join uses most-recent funding ≤ current year |
 | AGR cluster 0% funded many rows | FTS rarely tracks Agriculture cluster separately | Valid signal — AGR seldom appears in OCHA cluster appeals |
@@ -389,7 +397,49 @@ This system fits into **existing OCHA and CBPF analyst workflows** — it suppor
 
 ---
 
+## Responsible AI Scorecard
+
+| # | Dimension | Status | Key evidence |
+|---|-----------|--------|-------------|
+| 1 | **Transparency & Explainability** | ✅ | 5-component formula fully decomposable; shown in-app, in README, in every Gold row |
+| 2 | **Uncertainty Quantification** | ✅ | Monte Carlo CI (P10–P90, 1 000 runs) · low_confidence flag · EVPI panel |
+| 3 | **Fairness & Bias Awareness** | ⚠️ | Reporting bias & Ringer Bid mitigated; proxy inflation and neglect stacking documented |
+| 4 | **Neutral Framing** | ✅ | Agent system prompt enforces coverage-shortfall framing; red-team auditor enforces |
+| 5 | **Human Oversight** | ✅ | No auto-allocation; MLflow audit trail; 👎 flag button; escalation banner; LLM-as-Judge eval |
+| 6 | **Data Governance** | ✅ | All public sources declared; FTS vs CBPF rationale documented; `data_sources.md` |
+| 7 | **Model Governance** | ✅ | MLflow tracing per query; eval experiment; feedback log; scoring params versioned |
+
+Legend: ✅ implemented · ⚠️ partially mitigated (limitation documented) · ❌ not addressed
+
+---
+
 ## Changelog
+
+### 2026-05-21 (Session 6 — Final pre-submission)
+
+**Coverage expansion — 24 → 77 countries:**
+- Two-tier data model: `hno` (24 countries, full gap score) + `fts_proxy` (53 countries, funding gap + severity only)
+- `data_tier` column propagated through Silver → Gold; shown in ranked table as "HNO ✓" / "FTS proxy"
+- Hero stats fixed: unique-country counts per most-recent year (was counting all multi-year rows)
+- Hero: 77 countries · 229M people in need · 8 structural neglect cases
+
+**Donor concentration analysis (FTS Flows API):**
+- `pipeline/06_refresh_from_databricks.py` Step 6c: fetches all flows per HRP plan from `api.hpc.tools/v1/public/fts/flow`
+- Computes: `n_donors`, `top1_donor`, `top1_donor_share`, `top3_donor_share`, `donor_hhi` (Herfindahl-Hirschman Index)
+- Enriched for 72 countries; visible in ranked table + map hover
+- Notable findings: Haiti HHI=0.307 (highest concentration risk), Venezuela 45.7% single-donor
+
+**Responsible AI Scorecard (Tab 6 — 🛡️ RAI Scorecard):**
+- New dashboard tab with 7 RAI dimensions (transparency, uncertainty, fairness, framing, oversight, data governance, model governance)
+- Each dimension: status badge, evidence, specific implementation details
+- Directly addresses hackathon judge guidance: *"show MLflow tracing, tool-calling logic, and Responsible AI Scorecard"*
+- Added to `README.md` as standalone section
+
+**UI — Editorial Brutalism day/night theme:**
+- Full day/night toggle implemented via Streamlit session state + injected CSS f-strings
+- Sidebar always dark (`#18120e`) regardless of day/night mode; main area warm cream (`#f7f3ed`) ↔ dark (`#161310`)
+- Toggle button moved to top-right of main content area (above hero headline)
+- Agent chat layout reversed: newest Q&A at top, history in reverse-chronological order below
 
 ### 2026-05-20 (Session 4)
 

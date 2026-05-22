@@ -33,271 +33,438 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------------------------
-# Custom CSS — visual polish
+# Theme injection — reads st.session_state["theme"] to pick light vs dark CSS
 # ---------------------------------------------------------------------------
-st.markdown("""
+def _inject_theme():
+    dark = st.session_state.get("theme", "light") == "dark"
+
+    if dark:
+        css_vars = """
+        --bg-page:       #161310;
+        --bg-sidebar:    #0f0e0c;
+        --bg-main:       #161310;
+        --bg-table-even: #0f0e0c;
+        --bg-table-head: #1c1917;
+        --bg-table-hover:rgba(212,56,13,.07);
+        --border:        #ea580c;
+        --border-soft:   #1c1917;
+        --border-sidebar:#2c2420;
+        --txt-primary:   #faf7f2;
+        --txt-secondary: #a8a29e;
+        --txt-muted:     #57534e;
+        --txt-sidebar:   #faf7f2;
+        --txt-sidebar-dim:#57534e;
+        --txt-table-head:#57534e;
+        --txt-table-body:#a8a29e;
+        --accent:        #ea580c;
+        --accent-2:      #dc2626;
+        --score-hi:      #f87171;
+        --score-mid:     #fb923c;
+        --score-lo:      #fbbf24;
+        --stat1: #ea580c; --stat2: #faf7f2; --stat3: #dc2626; --stat4: #d97706;
+        --pill-str-bg:rgba(220,38,38,.14); --pill-str-fg:#f87171;
+        --pill-acu-bg:rgba(234,88,12,.14); --pill-acu-fg:#fb923c;
+        --pill-imp-bg:rgba(22,163,74,.14); --pill-imp-fg:#4ade80;
+        --sb-select-bg:#1c1917; --sb-select-fg:#78716c; --sb-select-bd:#292524;
+        """
+    else:
+        css_vars = """
+        --bg-page:       #f7f3ed;
+        --bg-sidebar:    #18120e;
+        --bg-main:       #f7f3ed;
+        --bg-table-even: #f0ebe4;
+        --bg-table-head: #1a1612;
+        --bg-table-hover:#fde8d8;
+        --border:        #1a1612;
+        --border-soft:   #e8e0d5;
+        --border-sidebar:#2c1e15;
+        --txt-primary:   #1a1612;
+        --txt-secondary: #5c4a3a;
+        --txt-muted:     #b0a090;
+        --txt-sidebar:   #f7f3ed;
+        --txt-sidebar-dim:#5c4a3a;
+        --txt-table-head:#b0a090;
+        --txt-table-body:#5c4a3a;
+        --accent:        #d4380d;
+        --accent-2:      #b91c1c;
+        --score-hi:      #b91c1c;
+        --score-mid:     #d4380d;
+        --score-lo:      #92400e;
+        --stat1: #d4380d; --stat2: #1a1612; --stat3: #b91c1c; --stat4: #c2870a;
+        --pill-str-bg:#fee2e2; --pill-str-fg:#b91c1c;
+        --pill-acu-bg:#ffedd5; --pill-acu-fg:#d4380d;
+        --pill-imp-bg:#dcfce7; --pill-imp-fg:#15803d;
+        --sb-select-bg:#241810; --sb-select-fg:#a89080; --sb-select-bd:#3d2d22;
+        """
+
+    st.markdown(f"""
 <style>
-/* ── Google Fonts ─────────────────────────────────────────────────────────── */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&family=Playfair+Display:ital,wght@0,700;0,900;1,700;1,900&display=swap');
 
-html, body, [class*="css"] {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
-}
+:root {{ {css_vars} }}
 
-/* ── Page background ─────────────────────────────────────────────────────── */
-.main .block-container {
-    padding-top: 1.5rem;
-    padding-bottom: 2rem;
-    max-width: 1400px;
-}
+html, body, [class*="css"] {{ font-family: 'Inter', -apple-system, sans-serif !important; }}
 
-/* ── App title ───────────────────────────────────────────────────────────── */
-h1 {
-    font-size: 1.75rem !important;
-    font-weight: 700 !important;
-    color: #1a202c !important;
-    letter-spacing: -0.02em;
-}
-h2 {
-    font-size: 1.15rem !important;
-    font-weight: 600 !important;
-    color: #2d3748 !important;
-    margin-top: 0.5rem;
-}
-h3 {
-    font-size: 1rem !important;
-    font-weight: 600 !important;
-    color: #2d3748 !important;
-}
+/* ── PAGE BACKGROUND ── */
+.main, .main .block-container {{
+    background: var(--bg-main) !important;
+    color: var(--txt-primary) !important;
+}}
+.main .block-container {{
+    padding-top: 2rem; padding-bottom: 3rem; max-width: 1400px;
+}}
+/* stApp root */
+[data-testid="stAppViewContainer"] > section:first-child,
+[data-testid="stAppViewContainer"] > div {{
+    background: var(--bg-main) !important;
+}}
 
-/* ── Metric cards ────────────────────────────────────────────────────────── */
-[data-testid="stMetric"] {
-    background: #ffffff;
-    border: 1px solid #e8edf3;
-    border-left: 4px solid #94a3b8;   /* default accent — overridden per-card below */
-    border-radius: 12px;
-    padding: 1rem 1.25rem;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
-}
-/* Color the left border of each metric card in order */
-[data-testid="stMetric"]:nth-child(1) { border-left-color: #3b82f6 !important; }
-[data-testid="stMetric"]:nth-child(2) { border-left-color: #f59e0b !important; }
-[data-testid="stMetric"]:nth-child(3) { border-left-color: #ef4444 !important; }
-[data-testid="stMetric"]:nth-child(4) { border-left-color: #8b5cf6 !important; }
+/* ── TYPOGRAPHY ── */
+h1 {{
+    font-family: 'Playfair Display', serif !important;
+    font-size: 4.5rem !important; font-weight: 900 !important;
+    line-height: 0.9 !important; letter-spacing: -0.03em !important;
+    color: var(--txt-primary) !important;
+}}
+h2 {{
+    font-size: 0.72rem !important; font-weight: 700 !important;
+    text-transform: uppercase !important; letter-spacing: 0.16em !important;
+    color: var(--txt-muted) !important;
+    border-bottom: 1px solid var(--border-soft) !important;
+    padding-bottom: 0.4rem !important; margin-bottom: 0.9rem !important;
+    border-top: none !important; margin-top: 0 !important;
+}}
+h3 {{
+    font-size: 0.78rem !important; font-weight: 700 !important;
+    text-transform: uppercase !important; letter-spacing: 0.12em !important;
+    color: var(--txt-muted) !important;
+}}
+.main p, .main li, .main label {{ color: var(--txt-primary) !important; }}
+.main span {{ color: inherit; }}
 
-[data-testid="stMetricLabel"] {
-    font-size: 0.72rem !important;
-    font-weight: 600 !important;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    color: #94a3b8 !important;
-}
-[data-testid="stMetricValue"] {
-    font-size: 1.75rem !important;
-    font-weight: 700 !important;
-    color: #0f172a !important;
-    line-height: 1.15 !important;
-}
-[data-testid="stMetricDelta"] {
-    font-size: 0.78rem !important;
-    font-weight: 500 !important;
-}
-
-/* ── Sidebar ─────────────────────────────────────────────────────────────── */
-[data-testid="stSidebar"] {
-    background: #1e2a3a !important;
-    border-right: none;
-}
-[data-testid="stSidebar"] * {
-    color: #e2e8f0 !important;
-}
-[data-testid="stSidebar"] .stMarkdown p {
-    color: #a0aec0 !important;
-    font-size: 0.8rem;
-}
-[data-testid="stSidebar"] h1,
-[data-testid="stSidebar"] h2,
-[data-testid="stSidebar"] h3 {
-    color: #f7fafc !important;
-}
-[data-testid="stSidebar"] [data-testid="stExpander"] {
-    background: rgba(255,255,255,0.06) !important;
-    border: 1px solid rgba(255,255,255,0.12) !important;
-    border-radius: 8px;
-}
-[data-testid="stSidebar"] label {
-    color: #cbd5e0 !important;
-    font-size: 0.82rem !important;
-    font-weight: 500 !important;
-}
-
-/* ── Sidebar widget inputs: force dark text so readable on white bg ───────── */
+/* ── SIDEBAR — hardcoded literals; sidebar is ALWAYS dark regardless of day/night ── */
+[data-testid="stSidebar"],
+[data-testid="stSidebar"] > div,
+[data-testid="stSidebar"] > div > div,
+[data-testid="stSidebar"] > div > div > div,
+[data-testid="stSidebarContent"],
+section[data-testid="stSidebar"] {{
+    background: {'#0f0e0c' if dark else '#18120e'} !important;
+    border-right: none !important;
+}}
+/* All text white by default */
+[data-testid="stSidebar"] * {{ color: #faf7f2 !important; }}
+/* Muted items — must stay LIGHT (sidebar always dark) */
+[data-testid="stSidebar"] .stMarkdown p {{
+    color: #a89080 !important; font-size: 0.78rem;
+}}
+[data-testid="stSidebar"] label {{
+    color: #a89080 !important;
+    font-size: 0.7rem !important; font-weight: 700 !important;
+    text-transform: uppercase; letter-spacing: 0.1em;
+}}
+[data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {{
+    color: #faf7f2 !important;
+    border-color: rgba(255,255,255,0.08) !important;
+    text-transform: uppercase; letter-spacing: 0.08em;
+}}
+/* Form inputs: dark text on light input background */
 [data-testid="stSidebar"] input,
 [data-testid="stSidebar"] textarea,
-[data-testid="stSidebar"] select,
-[data-testid="stSidebar"] [data-baseweb="select"] span,
-[data-testid="stSidebar"] [data-baseweb="select"] div,
 [data-testid="stSidebar"] [data-baseweb="input"] input,
 [data-testid="stSidebar"] [data-baseweb="base-input"] input,
-[data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] *,
-[data-testid="stSidebar"] .stNumberInput input {
-    color: #1a202c !important;
-}
-
-/* Selectbox placeholder and selected value */
-[data-testid="stSidebar"] [data-baseweb="select"] [data-testid="stMarkdownContainer"],
-[data-testid="stSidebar"] [class*="placeholder"],
+[data-testid="stSidebar"] .stNumberInput input {{ color: #000 !important; }}
+[data-testid="stSidebar"] [data-baseweb="select"] div,
 [data-testid="stSidebar"] [class*="singleValue"],
-[data-testid="stSidebar"] [class*="ValueContainer"] * {
-    color: #1a202c !important;
-}
-
-/* Slider value label */
+[data-testid="stSidebar"] [class*="ValueContainer"] * {{ color: #000 !important; }}
 [data-testid="stSidebar"] [data-testid="stTickBarMax"],
-[data-testid="stSidebar"] [data-testid="stTickBarMin"],
-[data-testid="stSidebar"] .stSlider [data-testid="stMarkdownContainer"] p {
-    color: #cbd5e0 !important;
-}
-
-/* Number input +/- buttons */
-[data-testid="stSidebar"] [data-baseweb="base-input"] button {
-    color: #4a5568 !important;
-}
-
-/* Expander title in sidebar — ensure readable text */
+[data-testid="stSidebar"] [data-testid="stTickBarMin"] {{
+    color: #a89080 !important;
+}}
+[data-testid="stSidebar"] [data-testid="stExpander"] {{
+    background: rgba(255,255,255,0.04) !important;
+    border: 2px solid {'#2c2420' if dark else '#2c1e15'} !important;
+    border-radius: 0 !important;
+}}
 [data-testid="stSidebar"] [data-testid="stExpander"] summary,
 [data-testid="stSidebar"] [data-testid="stExpander"] summary span,
-[data-testid="stSidebar"] [data-testid="stExpander"] summary p {
-    color: #2d3748 !important;
-    font-weight: 500 !important;
-}
-
-/* ── Tabs — pill style, nuclear override of Streamlit's underline ────────── */
-[data-testid="stTabs"] [role="tablist"] {
-    gap: 0.35rem !important;
-    background: #eef2f7 !important;
-    border-radius: 10px !important;
-    padding: 0.25rem !important;
-    border-bottom: none !important;
-    border: none !important;
-}
-/* Kill the default blue underline Streamlit adds via pseudo-element */
-[data-testid="stTabs"] button[role="tab"]::after,
-[data-testid="stTabs"] button[role="tab"]::before {
-    display: none !important;
-    border: none !important;
-    background: none !important;
-}
-[data-testid="stTabs"] button[role="tab"] {
-    font-size: 0.84rem !important;
-    font-weight: 500 !important;
-    padding: 0.4rem 1.1rem !important;
-    border-radius: 7px !important;
-    color: #64748b !important;
-    border: none !important;
-    border-bottom: none !important;
-    outline: none !important;
+[data-testid="stSidebar"] [data-testid="stExpander"] summary p {{
+    color: #faf7f2 !important; font-weight: 700 !important;
     background: transparent !important;
-    transition: all 0.15s ease !important;
-    text-decoration: none !important;
-}
-[data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
-    color: #1a202c !important;
-    font-weight: 600 !important;
-    background: #ffffff !important;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.12) !important;
-    border: none !important;
-    border-bottom: none !important;
-}
-[data-testid="stTabs"] button[role="tab"]:hover:not([aria-selected="true"]) {
-    color: #334155 !important;
-    background: rgba(255,255,255,0.55) !important;
-}
-/* Tab content area: remove top border */
-[data-testid="stTabs"] [role="tabpanel"] {
-    border-top: none !important;
-    padding-top: 1rem !important;
-}
+    text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.72rem !important;
+}}
+[data-testid="stSidebar"] [data-testid="stExpanderDetails"] {{
+    background: rgba(0,0,0,0.2) !important;
+}}
+[data-testid="stSidebar"] [data-testid="stExpanderDetails"] p,
+[data-testid="stSidebar"] [data-testid="stExpanderDetails"] span,
+[data-testid="stSidebar"] [data-testid="stExpanderDetails"] label {{
+    color: #78716c !important;
+}}
 
-/* ── Dataframe / table ───────────────────────────────────────────────────── */
-[data-testid="stDataFrame"] {
-    border: 1px solid #e2e8f0 !important;
-    border-radius: 10px !important;
-    overflow: hidden;
-}
-[data-testid="stDataFrame"] thead tr th {
-    background: #f7fafc !important;
-    font-weight: 600 !important;
-    font-size: 0.78rem !important;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #4a5568 !important;
-    border-bottom: 1px solid #e2e8f0 !important;
-}
-[data-testid="stDataFrame"] tbody tr:hover td {
-    background: #ebf4ff !important;
-}
+/* ── TABS ── */
+[data-testid="stTabs"] [role="tablist"] {{
+    gap: 0 !important; background: var(--bg-table-head) !important;
+    border-radius: 0 !important; padding: 0 !important;
+    border: 3px solid var(--border) !important; border-bottom: none !important;
+}}
+[data-testid="stTabs"] button[role="tab"]::after,
+[data-testid="stTabs"] button[role="tab"]::before {{
+    display: none !important; border: none !important; background: none !important;
+}}
+[data-testid="stTabs"] button[role="tab"] {{
+    font-size: 0.68rem !important; font-weight: 800 !important;
+    text-transform: uppercase !important; letter-spacing: 0.12em !important;
+    padding: 0.6rem 1.2rem !important; border-radius: 0 !important;
+    color: var(--txt-table-head) !important;
+    border-right: 1px solid var(--border-sidebar) !important;
+    background: var(--bg-table-head) !important;
+}}
+[data-testid="stTabs"] button[role="tab"][aria-selected="true"] {{
+    color: var(--txt-sidebar) !important; font-weight: 900 !important;
+    background: var(--accent) !important; border-right-color: var(--accent) !important;
+}}
+[data-testid="stTabs"] button[role="tab"]:hover:not([aria-selected="true"]) {{
+    color: var(--txt-secondary) !important; background: rgba(255,255,255,0.06) !important;
+}}
+[data-testid="stTabs"] [role="tabpanel"] {{
+    border: 3px solid var(--border) !important; border-top: none !important;
+    padding: 1.5rem !important;
+    background: var(--bg-main) !important; color: var(--txt-primary) !important;
+}}
 
-/* ── Buttons ─────────────────────────────────────────────────────────────── */
-[data-testid="stButton"] > button {
-    border-radius: 8px !important;
-    font-weight: 500 !important;
-    font-size: 0.85rem !important;
-    padding: 0.4rem 1rem !important;
-    transition: all 0.15s ease !important;
-    border: 1px solid #e2e8f0 !important;
-}
-[data-testid="stButton"] > button:hover {
-    border-color: #1a73e8 !important;
-    color: #1a73e8 !important;
-    background: #ebf4ff !important;
-}
+/* ── DATAFRAME ── */
+[data-testid="stDataFrame"] {{
+    border: 3px solid var(--border) !important; border-radius: 0 !important; overflow: hidden;
+}}
+[data-testid="stDataFrame"] thead tr th {{
+    background: var(--bg-table-head) !important; color: var(--txt-table-head) !important;
+    font-weight: 900 !important; font-size: 0.62rem !important;
+    text-transform: uppercase !important; letter-spacing: 0.12em !important;
+}}
+[data-testid="stDataFrame"] tbody tr:nth-child(odd) td  {{ background: var(--bg-main) !important; color: var(--txt-table-body) !important; }}
+[data-testid="stDataFrame"] tbody tr:nth-child(even) td {{ background: var(--bg-table-even) !important; color: var(--txt-table-body) !important; }}
+[data-testid="stDataFrame"] tbody tr:hover td {{ background: var(--bg-table-hover) !important; }}
 
-/* ── Expanders ───────────────────────────────────────────────────────────── */
-[data-testid="stExpander"] {
-    border: 1px solid #e2e8f0 !important;
-    border-radius: 10px !important;
-    overflow: hidden;
-}
-[data-testid="stExpander"] summary {
-    font-weight: 500 !important;
-    font-size: 0.9rem !important;
-    padding: 0.75rem 1rem !important;
-    background: #f7fafc !important;
-}
+/* ── BUTTONS ── */
+[data-testid="stButton"] > button {{
+    border-radius: 0 !important; font-weight: 800 !important;
+    font-size: 0.72rem !important; text-transform: uppercase !important;
+    letter-spacing: 0.1em !important; padding: 0.5rem 1.1rem !important;
+    border: 2px solid var(--border) !important;
+    background: transparent !important; color: var(--txt-primary) !important;
+    box-shadow: 3px 3px 0 var(--accent) !important;
+    transition: all 0.1s !important;
+}}
+[data-testid="stButton"] > button:hover {{
+    background: var(--accent) !important; color: #fff !important;
+    box-shadow: none !important; transform: translate(3px,3px) !important;
+}}
+/* theme toggle — compact, right-aligned, accent fill */
+[data-testid="stButton"]:has(button[kind="secondary"]) > button,
+div[data-testid="column"]:last-child [data-testid="stButton"] > button {{
+    font-size: 0.68rem !important; padding: 0.35rem 0.7rem !important;
+    width: 100% !important;
+    background: var(--accent) !important; color: #fff !important;
+    border-color: var(--accent) !important; box-shadow: none !important;
+}}
+div[data-testid="column"]:last-child [data-testid="stButton"] > button:hover {{
+    background: var(--accent-2) !important; border-color: var(--accent-2) !important;
+    transform: none !important;
+}}
 
-/* ── Alert / info / warning banners ─────────────────────────────────────── */
-[data-testid="stAlert"] {
-    border-radius: 8px !important;
-    border-left-width: 4px !important;
-    font-size: 0.83rem !important;
-    padding: 0.6rem 1rem !important;
-    line-height: 1.5 !important;
-}
+/* ── EXPANDERS (main) ── */
+.main [data-testid="stExpander"] {{
+    border: 2px solid var(--border) !important; border-radius: 0 !important; overflow: hidden;
+}}
+.main [data-testid="stExpander"] summary {{
+    font-weight: 800 !important; font-size: 0.7rem !important;
+    text-transform: uppercase !important; letter-spacing: 0.1em !important;
+    padding: 0.65rem 1rem !important;
+    background: var(--bg-table-head) !important; color: var(--txt-sidebar) !important;
+}}
+.main [data-testid="stExpander"] summary span {{ color: var(--txt-sidebar) !important; }}
+[data-testid="stExpanderDetails"] {{
+    background: var(--bg-main) !important; color: var(--txt-primary) !important; padding: 1rem !important;
+}}
+[data-testid="stExpanderDetails"] p,
+[data-testid="stExpanderDetails"] span,
+[data-testid="stExpanderDetails"] li {{ color: var(--txt-primary) !important; }}
 
-/* ── Chat messages ───────────────────────────────────────────────────────── */
-[data-testid="stChatMessage"] {
-    border-radius: 12px !important;
-    padding: 0.75rem 1rem !important;
-    margin-bottom: 0.5rem;
-}
+/* ── ALERTS ── */
+[data-testid="stAlert"] {{
+    border-radius: 0 !important; border: 2px solid var(--border) !important;
+    border-left-width: 5px !important; font-size: 0.82rem !important;
+    padding: 0.65rem 1rem !important; background: var(--bg-table-even) !important;
+}}
+[data-testid="stAlert"] p, [data-testid="stAlert"] span {{ color: var(--txt-primary) !important; }}
 
-/* ── Caption text ────────────────────────────────────────────────────────── */
-.stCaption, [data-testid="stCaptionContainer"] {
-    font-size: 0.78rem !important;
-    color: #718096 !important;
-}
+/* ── CHAT ── */
+[data-testid="stChatMessage"] {{
+    border-radius: 0 !important; border: 2px solid var(--border-soft) !important;
+    padding: 0.8rem 1rem !important; margin-bottom: 0.5rem;
+    background: var(--bg-table-even) !important;
+}}
+[data-testid="stChatMessage"] p {{ color: var(--txt-primary) !important; }}
 
-/* ── Spinner ─────────────────────────────────────────────────────────────── */
-[data-testid="stSpinner"] {
-    color: #1a73e8 !important;
-}
+/* ── CAPTION ── */
+.stCaption, [data-testid="stCaptionContainer"] p, small {{
+    font-size: 0.72rem !important; color: var(--txt-muted) !important;
+    font-weight: 500 !important; letter-spacing: 0.04em;
+}}
 
-/* ── Hide Streamlit branding ─────────────────────────────────────────────── */
-#MainMenu { visibility: hidden; }
-footer    { visibility: hidden; }
-header    { visibility: hidden; }
+/* ── st.metric FALLBACK ── */
+[data-testid="stMetric"] {{
+    background: var(--bg-table-even) !important;
+    border: 2px solid var(--border) !important; border-radius: 0 !important;
+    padding: 1rem !important;
+}}
+[data-testid="stMetricLabel"] {{
+    font-size: 0.6rem !important; font-weight: 700 !important;
+    text-transform: uppercase !important; letter-spacing: 0.12em !important;
+    color: var(--txt-muted) !important;
+}}
+[data-testid="stMetricValue"] {{
+    font-size: 2rem !important; font-weight: 900 !important;
+    color: var(--txt-primary) !important;
+    font-family: 'JetBrains Mono', monospace !important;
+    letter-spacing: -0.04em !important;
+}}
+
+/* ── CODE ── */
+.main code, .main pre {{
+    background: var(--bg-table-head) !important; color: var(--txt-sidebar) !important;
+    border-radius: 0 !important; font-size: 0.8rem;
+}}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar {{ width: 6px; height: 6px; }}
+::-webkit-scrollbar-track {{ background: var(--bg-main); }}
+::-webkit-scrollbar-thumb {{ background: var(--border); }}
+
+/* ── CUSTOM STAT CARDS ── */
+.stat-grid {{
+    display: grid; grid-template-columns: repeat(4,1fr);
+    border: 3px solid var(--border); margin-bottom: 1.75rem;
+}}
+.stat-card {{
+    padding: 1rem 1.1rem;
+    border-right: 3px solid var(--border);
+    background: var(--bg-main);
+}}
+.stat-card:last-child {{ border-right: none; }}
+.stat-card::before {{
+    content: ''; display: block; height: 4px; margin-bottom: 0.65rem;
+}}
+.stat-card:nth-child(1)::before {{ background: var(--stat1); }}
+.stat-card:nth-child(2)::before {{ background: var(--stat2); }}
+.stat-card:nth-child(3)::before {{ background: var(--stat3); }}
+.stat-card:nth-child(4)::before {{ background: var(--stat4); }}
+.stat-value {{
+    font-size: 2.4rem; font-weight: 900;
+    color: var(--txt-primary); line-height: 1; letter-spacing: -0.05em;
+    font-family: 'JetBrains Mono', monospace;
+}}
+.stat-label {{
+    font-size: 0.59rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.12em; color: var(--txt-muted); margin-top: 0.2rem;
+}}
+.stat-sub {{ font-size: 0.68rem; color: var(--txt-secondary); margin-top: 0.1rem; }}
+
+/* ── HERO ── */
+.hero-eyebrow {{
+    font-size: 0.62rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.18em; color: var(--txt-muted); margin-bottom: 0.5rem;
+}}
+.hero-headline {{
+    font-family: 'Playfair Display', serif;
+    font-size: 5rem; font-weight: 900;
+    color: var(--txt-primary); line-height: 0.88; letter-spacing: -0.03em;
+}}
+.hero-headline em {{ font-style: italic; color: var(--accent); }}
+.hero-rule-thick {{ border: none; border-top: 4px solid var(--border); margin: 1rem 0 0.2rem; }}
+.hero-rule-thin  {{ border: none; border-top: 1px solid var(--border-soft); margin: 0 0 0.75rem; }}
+.hero-dateline {{
+    font-size: 0.64rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.12em; color: var(--txt-muted); margin-bottom: 1.5rem;
+}}
+
+/* ── HIDE BRANDING ── */
+#MainMenu {{ visibility: hidden; }}
+footer    {{ visibility: hidden; }}
+header    {{ visibility: hidden; }}
+/* Force sidebar toggle button always visible */
+[data-testid="stSidebarCollapsedControl"] {{
+    visibility: visible !important;
+    display: flex !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    z-index: 999999 !important;
+}}
+[data-testid="stSidebarCollapsedControl"] * {{
+    visibility: visible !important;
+}}
 </style>
+<script>
+(function() {{
+    function fixSidebarToggle() {{
+        var btn = document.querySelector('[data-testid="stSidebarCollapsedControl"]');
+        if (btn) {{
+            btn.style.cssText += '; visibility: visible !important; display: flex !important; opacity: 1 !important; pointer-events: auto !important; z-index: 999999 !important;';
+        }}
+    }}
+    // Run immediately and on DOM changes
+    fixSidebarToggle();
+    var observer = new MutationObserver(fixSidebarToggle);
+    observer.observe(document.body, {{ childList: true, subtree: true }});
+    // Also wire up [ key shortcut manually
+    document.addEventListener('keydown', function(e) {{
+        if (e.key === '[') {{
+            var btn = document.querySelector('[data-testid="stSidebarCollapsedControl"]');
+            if (btn) btn.click();
+            var closeBtn = document.querySelector('[data-testid="stSidebarCollapseButton"]');
+            if (closeBtn) closeBtn.click();
+        }}
+    }});
+}})();
+</script>
+""", unsafe_allow_html=True)
+
+
+# ---------------------------------------------------------------------------
+# Hero banner
+# ---------------------------------------------------------------------------
+
+def render_hero(df_full: pd.DataFrame):
+    """Editorial Brutalism hero — Playfair Display + warm accent."""
+    if not df_full.empty:
+        # Use most-recent-year per country to avoid double-counting multi-year rows
+        recent = df_full.loc[df_full.groupby("country_iso3")["year"].idxmax()]
+        n_crises  = recent["country_iso3"].nunique()
+        total_pin = recent["people_in_need"].fillna(0).sum() / 1e6
+        n_struct  = int((recent["neglect_type"] == "structural").sum()) if "neglect_type" in recent.columns else 0
+    else:
+        n_crises, total_pin, n_struct = "—", 0, 0
+
+    # Day / Night toggle — top-right of main area
+    theme = st.session_state.get("theme", "light")
+    icon  = "🌙 Night" if theme == "light" else "☀️ Day"
+    col_spacer, col_btn = st.columns([10, 1])
+    with col_btn:
+        if st.button(icon, key="theme_toggle"):
+            st.session_state["theme"] = "dark" if theme == "light" else "light"
+            st.rerun()
+
+    st.markdown(f"""
+<div class="hero-eyebrow">Humanitarian Funding Intelligence · 2025</div>
+<div class="hero-headline">Where Need<br>Outpaces <em>Funding</em></div>
+<div class="hero-rule-thick"></div>
+<div class="hero-rule-thin"></div>
+<div class="hero-dateline">
+  {n_crises} countries tracked &nbsp;·&nbsp; {total_pin:.0f}M people in need &nbsp;·&nbsp;
+  {n_struct} structural neglect cases &nbsp;·&nbsp;
+  HDX HNO · FTS · INFORM · Claude Sonnet 4.6
+</div>
 """, unsafe_allow_html=True)
 
 
@@ -382,10 +549,10 @@ def render_sidebar(df: pd.DataFrame) -> pd.DataFrame:
 
     min_pin = st.sidebar.number_input(
         "Min people in need",
-        min_value=0, value=100_000, step=100_000,
-        help="Filter out small crises below this threshold",
+        min_value=0, value=0, step=100_000,
+        help="Filter out crises below this PIN threshold. Proxy countries (FTS only, no HNO data) have PIN=0 and pass when threshold is 0.",
     )
-    filtered = filtered[filtered["people_in_need"].fillna(0) >= min_pin]
+    filtered = filtered[(filtered["people_in_need"].fillna(0) >= min_pin)]
 
     st.sidebar.markdown("---")
 
@@ -553,14 +720,39 @@ def render_sidebar(df: pd.DataFrame) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 
 def render_metrics(df: pd.DataFrame):
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Crises shown", len(df))
-    total_pin = df["people_in_need"].fillna(0).sum()
-    col2.metric("Total people in need", f"{total_pin/1e6:.1f}M")
-    structural = (df["neglect_type"] == "structural").sum()
-    col3.metric("Structural neglect", structural)
-    no_hrp = (~df["has_hrp"].fillna(False)).sum()
-    col4.metric("No HRP in place", no_hrp)
+    """Bordered stat grid — Editorial Brutalism style."""
+    if df.empty:
+        return
+    n_crises   = len(df)
+    total_pin  = df["people_in_need"].fillna(0).sum()
+    structural = int((df["neglect_type"] == "structural").sum()) if "neglect_type" in df.columns else 0
+    no_hrp     = int((~df["has_hrp"].fillna(False)).sum()) if "has_hrp" in df.columns else 0
+    pin_str    = f"{total_pin/1e6:.1f}M" if total_pin >= 1e6 else f"{total_pin:,.0f}"
+
+    st.markdown(f"""
+<div class="stat-grid">
+  <div class="stat-card">
+    <div class="stat-value">{n_crises}</div>
+    <div class="stat-label">Crises shown</div>
+    <div class="stat-sub">after sidebar filters</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{pin_str}</div>
+    <div class="stat-label">People in need</div>
+    <div class="stat-sub">across filtered crises</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{structural}</div>
+    <div class="stat-label">Structural neglect</div>
+    <div class="stat-sub">underfunded 3+ years</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{no_hrp}</div>
+    <div class="stat-label">No HRP in place</div>
+    <div class="stat-sub">coverage assumed 0%</div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
@@ -610,14 +802,31 @@ def render_table(df: pd.DataFrame):
             lambda x: "" if x else "★ frontier"
         )
 
+    # Format donor concentration columns if available
+    if "top1_donor_share" in display_df.columns:
+        display_df["Top Donor %"] = display_df["top1_donor_share"].apply(
+            lambda x: f"{x:.0f}%" if pd.notna(x) else "—"
+        )
+    if "donor_hhi" in display_df.columns:
+        display_df["HHI"] = display_df["donor_hhi"].apply(
+            lambda x: f"{x:.3f}" if pd.notna(x) else "—"
+        )
+    if "data_tier" in display_df.columns:
+        display_df["Data Tier"] = display_df["data_tier"].map(
+            {"hno": "HNO ✓", "fts_proxy": "FTS proxy"}
+        ).fillna("—")
+
     display_cols = {
         "country_name": "Country",
         "year": "Year",
+        "Data Tier": "Data Tier",
         "Gap Score (CI)": "Gap Score [CI]",
         "coverage_pct": "Coverage %",
         "people_in_need": "People in Need",
         "neglect_type": "Neglect Type",
         "consecutive_years_underfunded": "Yrs Underfunded",
+        "Top Donor %": "Top Donor %",
+        "HHI": "Donor HHI",
         "has_hrp": "Has HRP",
         "Pareto": "Pareto",
         "low_confidence": "⚠️ Low Conf.",
@@ -652,6 +861,18 @@ def render_table(df: pd.DataFrame):
     if display_df["coverage_pct"].eq(0).any() and (~display_df.get("has_hrp", pd.Series([True]*len(display_df))).fillna(True)).any():
         st.caption("\\* **0%** = no Humanitarian Response Plan (HRP) on record — funding coverage is assumed 0%, not measured. Treat these rows as lower-bound estimates only.")
 
+    # Data tier legend
+    with st.expander("📋 Column guide", expanded=False):
+        st.caption(
+            "**Data Tier** — HNO ✓: full humanitarian needs assessment (people in need, INFORM severity, funding). "
+            "FTS proxy: only FTS financial data available — no official PIN figure, gap score based on funding gap + severity only. "
+            "Proxy rankings are conservative estimates.\n\n"
+            "**Top Donor %** — share of total funding from the single largest donor. High % = donor concentration risk. "
+            "If one donor withdraws, coverage collapses.\n\n"
+            "**Donor HHI** — Herfindahl-Hirschman Index for donor concentration (0 = perfectly distributed, 1 = monopoly). "
+            "HHI > 0.25 indicates high concentration; < 0.15 = diverse donor base."
+        )
+
     # CI explanation
     with st.expander("What is the confidence interval [CI]?", expanded=False):
         st.caption(
@@ -682,8 +903,10 @@ def render_map(df: pd.DataFrame):
             f"{r.get('country_name', r.get('country_iso3', ''))}<br>"
             f"Gap Score: {r.get('gap_score', 0):.3f}<br>"
             f"Coverage: {r.get('coverage_pct', 0):.1f}%<br>"
-            f"PIN: {r.get('people_in_need', 0)/1e6:.1f}M<br>"
-            f"Neglect: {r.get('neglect_type', 'N/A')}"
+            + (f"PIN: {r.get('people_in_need', 0)/1e6:.1f}M<br>" if pd.notna(r.get('people_in_need')) else "PIN: N/A (proxy)<br>")
+            + f"Neglect: {r.get('neglect_type', 'N/A')}<br>"
+            + (f"Donors: {int(r['n_donors'])} (HHI {r['donor_hhi']:.3f})<br>" if pd.notna(r.get('n_donors')) else "")
+            + (f"Data: {r.get('data_tier','')}")
             + (" ⚠️" if r.get("low_confidence") else "")
         ),
         axis=1,
@@ -1123,13 +1346,8 @@ def render_chat(df_filtered: pd.DataFrame):
     if "pending_query" in st.session_state:
         user_input = st.session_state.pop("pending_query")
 
-    # Display history
-    for msg in st.session_state.chat_history:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
-
+    # ── NEW message at the TOP (newest first layout) ────────────────────────
     if user_input:
-        st.session_state.chat_history.append({"role": "user", "content": user_input})
         with st.chat_message("user"):
             st.markdown(user_input)
 
@@ -1167,8 +1385,7 @@ def render_chat(df_filtered: pd.DataFrame):
             st.markdown(response)
             st.caption(f"Confidence: {_conf_badge}")
 
-            # ── Feedback button → eval_feedback.jsonl (CMU aimd-scaling-evaluation.md) ──
-            # Negative traces automatically become new eval golden cases.
+            # ── Feedback button ──────────────────────────────────────────────
             _msg_idx = len(st.session_state.chat_history)
             _fb_key  = f"thumbsdown_{_msg_idx}"
             if st.button("👎 Flag this response", key=_fb_key, help="Mark as incorrect / unhelpful — adds to eval dataset"):
@@ -1185,11 +1402,24 @@ def render_chat(df_filtered: pd.DataFrame):
                     _f.write(json.dumps(_entry) + "\n")
                 st.success("Flagged — this response will be included in the next evaluation run.")
 
-            st.session_state.chat_history.append({
-                "role":       "assistant",
-                "content":    response,
-                "confidence": confidence,
-            })
+        # Append both to history AFTER displaying
+        st.session_state.chat_history.append({"role": "user", "content": user_input})
+        st.session_state.chat_history.append({
+            "role":       "assistant",
+            "content":    response,
+            "confidence": confidence,
+        })
+        # Show older history below the new exchange
+        history_to_show = st.session_state.chat_history[:-2]
+    else:
+        history_to_show = st.session_state.chat_history
+
+    # ── HISTORY: reverse order (newest → oldest) below the current exchange ──
+    if history_to_show:
+        st.markdown("---")
+        for msg in reversed(history_to_show):
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
 
 
 # ---------------------------------------------------------------------------
@@ -1441,18 +1671,188 @@ the most dangerous scenario for structural neglect analysis.
 
 
 # ---------------------------------------------------------------------------
+# Responsible AI Scorecard (explicitly requested by hackathon judges)
+# ---------------------------------------------------------------------------
+
+def render_rai_scorecard():
+    """
+    Responsible AI Scorecard — covers transparency, uncertainty, fairness,
+    human oversight, and data governance.
+
+    Referenced in hackathon judge guidance:
+    'Show a quick view of your MLflow tracing, tool-calling logic, and
+    Responsible AI Scorecard to prove your agents are reliable and governed.'
+    """
+    st.subheader("Responsible AI Scorecard")
+    st.caption(
+        "This scorecard documents the design choices made to ensure the Geo-Insight "
+        "Command Center is transparent, auditable, and safe for use in humanitarian "
+        "resource allocation decisions. Each dimension is grounded in a specific "
+        "architectural or data decision — not a checkbox exercise."
+    )
+
+    # ── Dimension 1: Transparency ────────────────────────────────────────────
+    with st.expander("✅ 1 — Transparency & Explainability", expanded=True):
+        col1, col2 = st.columns([1, 2])
+        col1.metric("Status", "✅ Implemented")
+        col2.markdown(
+            "**Every gap score is fully decomposable** into 5 intermediate components "
+            "(`funding_gap`, `need_scale`, `severity_mult`, `base_score`, `neglect_factor`). "
+            "The formula is displayed in-app, in README, and stored in every Gold table row. "
+            "No black-box model — a junior analyst can replicate any score in a spreadsheet."
+        )
+        st.markdown("""
+| Component | What it means | Source |
+|-----------|--------------|--------|
+| `funding_gap` | `1 − (received / requested)` — primary underfunding signal | FTS |
+| `need_scale` | `log1p(PIN) / log1p(P95_PIN)` — scale of humanitarian need, Ringer Bid-safe | HNO |
+| `severity_mult` | `INFORM_severity / 10` — independent crisis urgency signal | INFORM |
+| `neglect_factor` | `1 + (years_underfunded × 0.15)` — structural vs acute penalty | Derived |
+| `gap_score` | `base_score × neglect_factor` — final composite score | Computed |
+
+**Swing Weighting:** Weights (0.435 / 0.348 / 0.217) derived by answering *"if you could improve ONE dimension from worst to best, which matters most?"* — a principled MCDM technique, not arbitrary tuning.
+        """)
+
+    # ── Dimension 2: Uncertainty & Confidence ───────────────────────────────
+    with st.expander("✅ 2 — Uncertainty Quantification", expanded=True):
+        col1, col2 = st.columns([1, 2])
+        col1.metric("Status", "✅ Implemented")
+        col2.markdown(
+            "**Three-layer uncertainty system.** Rankings are never shown as point estimates alone."
+        )
+        st.markdown("""
+| Layer | Method | Shown as |
+|-------|--------|---------|
+| **Monte Carlo CI** | 1 000 simulations, PIN ±30% / funding ±20% triangular distributions | Gap Score [P10–P90] in table |
+| **Low-confidence flag** | No HRP (0% = assumption) or data >18 months old | ⚠️ column in table |
+| **EVPI** | Expected Value of Perfect Information — score uncertainty under improved data | EVPI expander in Tab 1 |
+
+**EVPI implication:** If P10–P90 range > 0.15, rank position is data-quality sensitive — a better HNO assessment is worth commissioning before allocation decisions.
+        """)
+
+    # ── Dimension 3: Fairness & Bias Awareness ───────────────────────────────
+    with st.expander("⚠️ 3 — Fairness & Bias Awareness", expanded=False):
+        col1, col2 = st.columns([1, 2])
+        col1.metric("Status", "⚠️ Partially mitigated")
+        col2.markdown(
+            "Known biases are documented and partially mitigated — not eliminated."
+        )
+        st.markdown("""
+| Bias type | How it arises | Mitigation |
+|-----------|--------------|------------|
+| **Reporting bias** | Countries with no HRP have 0% coverage *by assumption*, not measurement | `0%*` footnote in table; `low_confidence = True` |
+| **Ringer Bid distortion** | One very large crisis (Sudan 34M PIN) would compress all others' `need_scale` | 95th-percentile reference instead of global max |
+| **FTS proxy inflation** | Countries without HNO PIN score on funding gap + severity only, may rank unexpectedly high | `data_tier = fts_proxy` column; explicit warning in column guide |
+| **Neglect factor stacking** | Structural neglect bonus (+15%/year) is uncapped — could theoretically inflate to any multiple | Capped at 3 years data window (max ×1.45 in practice) |
+| **Media attention bias** | FTS funding is partly driven by media salience — underfunded ≠ overlooked if needs are simply smaller | INFORM severity as independent signal partially corrects |
+        """)
+
+    # ── Dimension 4: Neutral Framing ─────────────────────────────────────────
+    with st.expander("✅ 4 — Neutral Framing (Framing Trap Avoidance)", expanded=False):
+        col1, col2 = st.columns([1, 2])
+        col1.metric("Status", "✅ Implemented")
+        col2.markdown(
+            "Agent briefing notes follow strict neutral framing rules, "
+            "inspired by CMU ODI decision design guidance (Framing Trap)."
+        )
+        st.markdown("""
+**Agent system prompt rules (enforced per query):**
+1. Express gaps as **coverage shortfalls** (e.g. "38% funded, 62% shortfall") — never as loss/death framing
+2. **No anchoring** to prior-year funding — each assessment is independent
+3. **Mandatory counter-argument** per crisis (e.g. "unreported bilateral flows may overstate gap")
+4. **Explicit uncertainty** disclosure if `low_confidence = True`
+5. **Ground all numbers** in the data table — no hallucinated figures
+
+These rules are injected into the system prompt and verified by the red-team tool in the ReAct loop.
+        """)
+
+    # ── Dimension 5: Human Oversight ─────────────────────────────────────────
+    with st.expander("✅ 5 — Human Oversight (Human-in-the-Loop)", expanded=False):
+        col1, col2 = st.columns([1, 2])
+        col1.metric("Status", "✅ Implemented")
+        col2.markdown(
+            "The system is explicitly designed as **decision support**, not automated action."
+        )
+        st.markdown("""
+| Safeguard | Implementation |
+|-----------|---------------|
+| **No auto-allocation** | Rankings are displayed for analyst review; no system can trigger fund transfers |
+| **Low-confidence escalation** | If agent confidence = 'low', UI shows a red warning banner before displaying results |
+| **👎 Flag button** | Every agent response has a flag button; flagged responses are logged to `eval_feedback.jsonl` |
+| **MLflow tracing** | Every query is traced (root span + per-tool child spans) — full audit trail of agent reasoning |
+| **Red-team challenge** | A second Claude call acts as adversarial auditor, surfacing weaknesses in every ranking |
+| **LLM-as-Judge eval** | `05_evaluate_agent.py` runs 4 golden test cases and scores agent responses for grounding, neutrality, defensibility |
+        """)
+
+    # ── Dimension 6: Data Governance ─────────────────────────────────────────
+    with st.expander("✅ 6 — Data Governance & Source Transparency", expanded=False):
+        col1, col2 = st.columns([1, 2])
+        col1.metric("Status", "✅ Implemented")
+        col2.markdown(
+            "All data sources are publicly available, declared, and versioned. "
+            "No proprietary or personally-identifiable data used."
+        )
+        st.markdown("""
+| Source | What it provides | Why FTS (not CBPF) for primary funding |
+|--------|-----------------|---------------------------------------|
+| **HNO 2024/2025/2026** | People in need, targeted — 24 countries | Official OCHA humanitarian needs data |
+| **FTS Global** | Requirements + funding received — 77 countries | Most comprehensive country-level funding tracker |
+| **INFORM Severity** | Independent crisis severity 0–10 — 67 countries | Non-self-reported, ACAPS-validated |
+| **HRP list** | Humanitarian Response Plan presence — 78 countries | Distinguishes measured vs assumed 0% coverage |
+| **FTS Flows API** | Donor breakdown per plan — 72 countries | Donor concentration analysis (HHI, top donor %) |
+
+**Why FTS instead of CBPF for primary coverage metric?**
+The CBPF allocation file (`Allocations__20260518_145817_UTC.csv`) available in the Databricks volume only contains **2018 data** — not current. The FTS requirements/funding file covers 2024–2026 across 77 countries and is the OCHA-official tracker used in HRP reporting. CBPF allocations are preserved in `bronze_cbpf.parquet` for supplementary use.
+
+All sources declared in [`data_sources.md`](../data_sources.md).
+        """)
+
+    # ── Dimension 7: Model Governance ────────────────────────────────────────
+    with st.expander("✅ 7 — Model Governance (MLflow)", expanded=False):
+        col1, col2 = st.columns([1, 2])
+        col1.metric("Status", "✅ Implemented")
+        col2.markdown(
+            "Every agent interaction is logged and traceable via MLflow. "
+            "Scoring parameters are versioned."
+        )
+        st.markdown("""
+| Governance artefact | Location | Contents |
+|--------------------|---------|---------|
+| **MLflow traces** | `mlflow ui --port 5001` → Geo-Insight experiment | Root span per query + child span per tool call; full I/O logged |
+| **MLflow eval runs** | `geo-insight-eval` experiment | 4 golden cases, LLM-as-Judge scores for grounding / neutrality / defensibility |
+| **Scoring parameters** | `core/scoring_logic.py` · `SCORING_WEIGHTS` dict | Logged to MLflow on each scoring run |
+| **Gold table version** | `data/gold/gold_ranked_crises.parquet` | Timestamped rebuild via `06_refresh_from_databricks.py` |
+| **Feedback log** | `data/eval_feedback.jsonl` | User-flagged responses → next eval batch |
+        """)
+
+    # ── Summary status table ──────────────────────────────────────────────────
+    st.markdown("### Summary")
+    st.dataframe(pd.DataFrame([
+        {"Dimension": "Transparency & Explainability",   "Status": "✅", "Key evidence": "5-component formula, in-app + README"},
+        {"Dimension": "Uncertainty Quantification",      "Status": "✅", "Key evidence": "Monte Carlo CI + EVPI + low_confidence flag"},
+        {"Dimension": "Fairness & Bias Awareness",       "Status": "⚠️", "Key evidence": "Biases documented; Ringer Bid + proxy tier mitigated"},
+        {"Dimension": "Neutral Framing",                 "Status": "✅", "Key evidence": "Agent system prompt rules + red-team enforcer"},
+        {"Dimension": "Human Oversight",                 "Status": "✅", "Key evidence": "No auto-action; MLflow traces; flag button; escalation banner"},
+        {"Dimension": "Data Governance",                 "Status": "✅", "Key evidence": "All public sources; FTS vs CBPF rationale documented"},
+        {"Dimension": "Model Governance",                "Status": "✅", "Key evidence": "MLflow tracing + eval + feedback loop"},
+    ]), use_container_width=True, hide_index=True)
+
+    st.caption(
+        "Legend: ✅ = implemented · ⚠️ = partially mitigated (known limitation) · ❌ = not addressed. "
+        "This scorecard is a living document — limitations are disclosed, not hidden."
+    )
+
+
+# ---------------------------------------------------------------------------
 # Main app
 # ---------------------------------------------------------------------------
 
 def main():
-    st.title("🌍 Geo-Insight: Overlooked Humanitarian Crises")
-    st.caption(
-        "Decision support for **CBPF pooled fund managers** — identifies where humanitarian need "
-        "significantly outpaces funding coverage, enabling evidence-based allocation prioritisation. "
-        "Built for UN OCHA · Databricks Hackathon 2026 · Data: HDX HNO, FTS, CBPF, INFORM Severity Index"
-    )
+    st.session_state.setdefault("theme", "light")
+    _inject_theme()
 
     df_full = load_gold()
+    render_hero(df_full)
 
     if df_full.empty:
         st.error(
@@ -1472,7 +1872,9 @@ def main():
 
     render_metrics(df_filtered)
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Ranked Table", "World Map", "Sector Gaps", "Data Drift", "Ask the Agent"])
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+        "Ranked Table", "World Map", "Sector Gaps", "Data Drift", "Ask the Agent", "🛡️ RAI Scorecard"
+    ])
 
     with tab1:
         render_table(df_filtered)
@@ -1495,6 +1897,9 @@ def main():
 
     with tab5:
         render_chat(df_filtered)
+
+    with tab6:
+        render_rai_scorecard()
 
     # Scoring formula transparency
     with st.expander("How is the Gap Score calculated?"):
