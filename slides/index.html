@@ -1612,7 +1612,7 @@ html, body {
 <div id="nav">
   <button onclick="go(-1)">← Prev</button>
   <div class="sep">|</div>
-  <div id="slide-counter">Cover / 11</div>
+  <div id="slide-counter">1 / 12</div>
   <div class="sep">|</div>
   <button onclick="go(1)">Next →</button>
 </div>
@@ -1625,7 +1625,7 @@ function go(dir) {
   slides[cur].classList.remove('active');
   cur = Math.max(0, Math.min(slides.length - 1, cur + dir));
   slides[cur].classList.add('active');
-  document.getElementById('slide-counter').textContent = (cur === 0 ? 'Cover' : cur) + ' / 11';
+  document.getElementById('slide-counter').textContent = (cur + 1) + ' / 12';
 }
 
 document.addEventListener('keydown', e => {
